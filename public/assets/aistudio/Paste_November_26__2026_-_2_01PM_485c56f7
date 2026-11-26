@@ -1,0 +1,914 @@
+PIPRA BROWSER — FINAL MASTER UPGRADE PROMPT
+
+GeckoView Migration • Premium Browser UI • Advanced Privacy • Ultimate Ad Blocker • Secure DNS • Complete Feature Implementation • GitHub Actions Build Repair
+
+You are a senior Android browser engineer, Kotlin developer, GeckoView specialist, browser privacy and security engineer, UI/UX designer, and CI/CD engineer.
+
+Your task is to transform my existing Pipra Android browser project into a professional, fast, privacy-focused, production-oriented Android browser.
+
+This is an existing repository upgrade, not a request to create an unrelated demo app or replace the project with a new template.
+
+I will provide:
+
+1. A ZIP file containing the existing GitHub repository source code.
+2. The selected Pipra ant logo image as the official branding reference.
+
+Repository: https://github.com/omor-com/Pipra
+
+Application name: Pipra
+
+Developer attribution: Muhammad Omor
+
+Preferred application ID: "com.pipra.browser.app"
+
+Treat the uploaded repository as the source of truth. Inspect the actual Gradle files, application ID, source code, manifests, resources, existing features, and GitHub Actions workflows before making changes. If the real application ID differs from the preferred ID above, preserve the existing ID unless a change is explicitly approved. Never change it casually.
+
+---
+
+1. PRIMARY OBJECTIVES
+
+Deliver a complete, buildable Android browser with these priorities:
+
+1. Strong, practical privacy and security.
+2. Fast browsing, smooth scrolling, and reasonable battery usage.
+3. A polished, premium, modern interface.
+4. Reliable local data storage and recovery.
+5. A functional ad-blocking and website-blocking engine.
+6. Secure DNS profiles, including Kahf Guard integration.
+7. A stable GeckoView-based browsing engine.
+8. Working GitHub Actions workflows that build actual APK artifacts.
+9. All the features specified in this document, implemented in appropriate phases without silently dropping requirements.
+
+Do not spend the entire task generating plans, mockups, or placeholder screens. Inspect the project, implement the changes, run available tests and builds, and report the actual results.
+
+If a feature depends on an unsupported GeckoView API, external service, or unavailable infrastructure, investigate the supported implementation and explain any remaining limitation. Never pretend a feature works when it is only a UI mockup.
+
+2. MANDATORY REPOSITORY PRESERVATION
+
+Before modifying anything:
+
+- Inspect the entire relevant project structure.
+- Identify the existing application ID, Kotlin/Java configuration, Gradle and Android Gradle Plugin versions, compile SDK, target SDK, minimum SDK, dependencies, manifests, resources, and build workflows.
+- Inventory every existing screen, feature, setting, permission, data model, and storage mechanism.
+- Identify the precise cause of the existing GitHub Actions build failure.
+- Create a clear implementation plan based on the actual repository.
+- Preserve existing working functionality wherever technically possible.
+
+Rules:
+
+- Do not delete existing features merely because replacing them is easier.
+- Do not reset the project into a blank starter application.
+- Do not unnecessarily redesign unrelated components.
+- Do not change the package/application ID without authorization.
+- Do not overwrite existing user data structures without a migration plan.
+- Preserve bookmarks, history, settings, downloads, and other locally stored data when their formats allow it.
+- Add safe database and preference migrations when required.
+- If an existing feature cannot be retained during migration, explain the reason and implement the closest supported alternative.
+- Never use fake buttons, hardcoded statistics, sample-only data, or simulated functionality in the production implementation.
+
+3. MIGRATE FROM ANDROID WEBVIEW TO GECKOVIEW
+
+Use Mozilla GeckoView as the primary browsing engine instead of Android WebView.
+
+Official references:
+
+- GeckoView documentation: https://mozilla.github.io/geckoview/
+- GeckoView WebExtensions documentation: https://firefox-source-docs.mozilla.org/mobile/android/geckoview/consumer/web-extensions.html
+- GeckoView source: https://github.com/mozilla/geckoview
+
+Requirements:
+
+- Select a GeckoView version compatible with the project's Android configuration.
+- Use official, supported GeckoView APIs.
+- Configure engine initialization and shutdown correctly.
+- Handle Android activity and process lifecycle events safely.
+- Implement session creation, switching, suspension where supported, restoration, and cleanup.
+- Preserve normal website compatibility, JavaScript-dependent sites, downloads, redirects, media playback, and navigation behavior.
+- Handle certificates and HTTPS errors securely. Never bypass certificate errors automatically.
+- Implement appropriate permission prompts for camera, microphone, location, notifications, and other supported website capabilities.
+- Ensure file uploads, downloads, external intents, and Android back navigation work correctly.
+- Avoid leaking browser sessions, activities, or file handles.
+- Keep GeckoView dependencies and browser-engine resources compatible with the project's build configuration.
+
+Do not assume that every WebView API has an identical GeckoView replacement. Research and implement each required feature using supported APIs or a clearly documented alternative.
+
+4. PREMIUM BROWSER INTERFACE
+
+Create a polished interface inspired by the usability of modern mainstream mobile browsers without copying another browser's branding, proprietary assets, or exact layout.
+
+Visual direction
+
+- Premium, minimal, professional Material 3-inspired design.
+- Dark mode enabled by default.
+- Optional light mode.
+- Respect system appearance where appropriate while preserving the user's explicit theme preference.
+- Consistent typography, spacing, iconography, rounded surfaces, and subtle transitions.
+- Responsive layout for different Android screen sizes.
+- Smooth animations that do not introduce unnecessary lag.
+- Proper empty, loading, error, and permission states.
+- Accessible touch targets and readable contrast.
+- Avoid excessive gradients, unnecessary decorations, and an artificial AI-generated appearance.
+
+Use the uploaded ant logo as the official visual reference. Preserve its recognizable design and proportions. Do not invent a different mascot, add unwanted text to the icon, or substitute an unrelated logo.
+
+Use locally packaged assets and libraries where practical. Do not introduce unnecessary online UI dependencies, remote fonts, or CDN requirements.
+
+Main browser screen
+
+Implement:
+
+- A professional address and search bar.
+- Navigation controls: Back, Forward, Home, Reload/Stop.
+- Tab switcher.
+- New tab and new private tab actions.
+- Bookmarks access.
+- Downloads access.
+- Main menu.
+- Privacy dashboard access.
+- Secure connection indicators.
+- Clear loading progress.
+- A useful error page with Retry.
+- Keyboard and Android back-button handling.
+
+Keep the interface compact enough for everyday mobile use.
+
+Home page
+
+Create a complete, attractive browser homepage featuring:
+
+- Search/address field.
+- Google as the default search provider.
+- Optional search providers: DuckDuckGo, Bing, Brave Search, and a custom search URL where supported.
+- Editable website shortcuts.
+- Bookmarks.
+- Optional recently visited websites.
+- A clear privacy/ad-blocking summary based on real local data.
+- A prominent new-tab action.
+- Settings access.
+- A clean, responsive layout.
+
+Do not hardcode fake search results or fictional statistics.
+
+Search engine settings
+
+Allow users to choose their default search provider and manage supported custom search templates.
+
+Validate custom search configuration and prevent unsafe URL handling. Do not silently replace the user's selected search provider.
+
+5. ADVANCED TAB MANAGEMENT
+
+Implement a real tab management system:
+
+- Create, switch, and close tabs.
+- Display tab previews or thumbnails where supported.
+- Grid-based tab overview.
+- Tab groups with editable names.
+- Create and move tabs between groups.
+- Close individual tabs.
+- Restore recently closed tabs when safe and possible.
+- Restore eligible normal tabs after process recreation.
+- Provide a clear indication of private tabs.
+- Manage background sessions without unnecessary resource usage.
+
+Do not confuse session restoration with restoring all cookies or authentication states after every process death.
+
+Private browsing
+
+Private tabs must be isolated from normal browsing as far as supported by the GeckoView architecture.
+
+Requirements:
+
+- Separate private session handling.
+- No intentional persistence of private browsing history.
+- No private URLs in normal history or recently visited lists.
+- Appropriate cookie and storage isolation.
+- Clear private session data when all private sessions are closed, according to the implemented architecture.
+- Clearly explain any data that cannot be prevented from persisting, such as downloads saved to public storage or activity visible to websites and network operators.
+
+Do not advertise private browsing as complete anonymity.
+
+6. ULTIMATE AD BLOCKER
+
+Build a functional, configurable browser-level ad and tracker blocking system.
+
+The interface must offer four levels:
+
+1. Off — browser ad blocking disabled.
+2. Medium — balanced protection with reasonable website compatibility.
+3. High — stronger ad and tracker filtering.
+4. Ultimate — the strongest supported built-in filtering configuration.
+
+These levels must have meaningfully different configurations. Do not merely change a label or counter.
+
+Blocking engine
+
+- Research a GeckoView-compatible approach.
+- Use a suitable local filtering engine, supported WebExtension architecture, request-blocking integration, or a combination of compatible mechanisms.
+- Support reputable filter lists where licensing permits.
+- Support custom filter sources where safe and technically feasible.
+- Store downloaded filter data locally.
+- Cache compiled or processed rules to avoid repeatedly parsing large lists.
+- Apply blocking rules consistently to supported browser requests.
+- Handle filter-list updates, failed downloads, invalid rules, and outdated data.
+- Keep a last-known-good filter configuration when a new update fails.
+- Include clear filter source information, last update time, and error status.
+- Do not download executable code or silently install untrusted extensions as part of a filter update.
+
+User controls
+
+- Global ad-blocker on/off.
+- Medium, High, and Ultimate levels.
+- Per-site allowlist and blocking exceptions.
+- Ability to allow a website temporarily or permanently.
+- Ability to remove individual exceptions.
+- Restore default filter configuration.
+- Display active filtering status.
+
+Honest statistics
+
+Show real supported measurements, such as:
+
+- Requests blocked.
+- Trackers blocked where classification is available.
+- Number of active filter lists.
+- Last successful filter update.
+- Current protection level.
+
+Never fabricate blocked-request counts. If exact measurement is unavailable, display a clearly labeled estimate or omit the statistic.
+
+Website compatibility
+
+Provide a way to disable blocking for a particular site without turning off all browser protection.
+
+Explain that no browser ad blocker can guarantee removal of every advertisement, sponsored result, first-party ad, or dynamically generated page element.
+
+7. EXTENSION-READY ARCHITECTURE
+
+Use GeckoView's supported WebExtensions functionality where appropriate.
+
+Design the architecture so future extension support is possible without rewriting the entire browser.
+
+Requirements:
+
+- Prefer a controlled, documented extension architecture.
+- Support bundled or explicitly approved extensions when compatible.
+- Investigate whether user-installed extensions can be safely and reliably supported by the chosen GeckoView version.
+- If arbitrary user-installed extensions are not fully supported, do not display a misleading extension store or promise compatibility.
+- Do not silently install extensions.
+- Request only necessary permissions.
+- Explain extension permissions and provide a way to disable or remove supported extensions.
+- Keep the built-in ad blocker functional independently of optional extensions.
+
+Do not make arbitrary extension installation a security vulnerability or a mandatory dependency for normal browsing.
+
+8. WEBSITE AND ADULT WEBSITE BLOCKING
+
+Implement a dedicated website-blocking feature independent of the ad blocker and Secure DNS.
+
+Custom domain rules
+
+Allow users to:
+
+- Add a domain manually.
+- Remove a rule when permitted.
+- View the complete list of blocked domains.
+- Enable or disable supported rules where permitted.
+- View why a website was blocked.
+- Configure adult website blocking separately.
+- Import supported domain lists.
+- Review changes before importing a large list.
+
+Domain matching
+
+Implement normalized, case-insensitive domain matching.
+
+Rules must distinguish exact-domain matches from subdomain matches and avoid accidental partial matches. For example, a rule for "example.com" must not incorrectly block "notexample.com".
+
+Support appropriate URL parsing for HTTP and HTTPS. Do not allow malformed domains, dangerous schemes, or arbitrary script injection through a domain rule.
+
+Time-locked rules
+
+Support configurable lock durations of 7 to 365 days.
+
+When a rule is locked:
+
+- Normal Settings must not provide an ordinary edit/delete path before the lock expires.
+- Show the lock's expiration date and remaining time.
+- Keep the lock state consistent after app restart.
+- Validate stored expiration times.
+- Allow normal rule management after the configured lock expires.
+
+Be transparent that an application-level lock cannot prevent someone with device control from clearing app data, uninstalling the application, modifying the device, or otherwise bypassing local restrictions.
+
+Do not claim that these locks are impossible to bypass.
+
+Adult website blocking
+
+- Provide a separate adult-site protection toggle.
+- Use a reputable, legally usable domain source.
+- Cache the last valid list locally for offline operation.
+- Display the list's source, update time, and current status.
+- Retain the last-known-good list if an update fails.
+- Provide clear block-page explanations and safe recovery options.
+- Avoid sending a user's browsing history to a third-party filtering service unnecessarily.
+
+The browser-level blocker, adult-site filter, and Secure DNS must be separate controls with understandable interactions.
+
+9. PRIVACY DASHBOARD
+
+Create a dedicated Privacy Dashboard based on actual engine events and locally recorded data.
+
+Display available information such as:
+
+- Requests blocked.
+- Trackers blocked.
+- Current ad-blocking level.
+- Active filter lists.
+- Current site security state.
+- Site permissions.
+- Available cookie and tracking protection status.
+- Secure DNS mode.
+- Website/adult blocking status.
+- Relevant privacy settings.
+- Clear-history and clear-data shortcuts.
+
+Use GeckoView Content Blocking APIs and event callbacks where supported.
+
+Do not use fake privacy scores, fictional threat scans, invented risk percentages, or unsupported security claims.
+
+If a metric cannot be measured reliably, show its limitation instead of inventing a number.
+
+10. SECURE DNS — KAHF GUARD INTEGRATION
+
+Implement a dedicated Secure DNS settings screen.
+
+The requested Kahf Guard hostnames are:
+
+- "low.kahfguard.com"
+- "medium.kahfguard.com"
+- "high.kahfguard.com"
+
+Before implementation, verify the provider's current official documentation and determine which protocol and endpoint formats are actually supported.
+
+Do not assume that a hostname is automatically a valid DNS-over-HTTPS URL.
+
+Required profiles
+
+Provide these choices:
+
+1. Low
+2. Medium
+3. High
+4. Custom DNS
+5. Off
+
+The default selection must be Medium / Recommended.
+
+Low
+
+Use the verified Low profile, with its actual supported configuration.
+
+Medium
+
+Use the verified Medium profile and select it by default.
+
+High
+
+Use the verified High profile, with its actual supported configuration.
+
+Custom DNS
+
+Allow a user to enter a supported DNS configuration, validate it, and test connectivity where technically possible.
+
+Support only the DNS protocols and formats that the selected architecture can genuinely implement. Explain protocol limitations.
+
+Off
+
+Disable Pipra's custom DNS override and use the normal supported system or browser-engine network DNS configuration.
+
+Do not describe this as disabling DNS itself.
+
+Critical Android limitation
+
+Distinguish among:
+
+- Android system Private DNS, usually based on DNS-over-TLS.
+- Browser-level DNS-over-HTTPS.
+- DNS resolution handled by GeckoView or the underlying operating system.
+
+Do not silently modify Android system-wide Private DNS settings. If system settings must be changed manually, explain that to the user and provide an appropriate Settings link where possible.
+
+Do not claim that setting a hostname in the UI guarantees all GeckoView traffic uses that DNS provider. Verify the actual supported integration and implement a real solution for the selected architecture.
+
+If full browser-level Secure DNS cannot be implemented reliably using supported APIs, report the limitation and implement the safest supported alternative instead of faking it.
+
+DNS behavior and privacy
+
+- Save the user's selected DNS profile locally.
+- Apply the selected supported configuration consistently.
+- Show the active mode and connection/test status accurately.
+- Handle unavailable providers, invalid custom endpoints, and network failures.
+- Avoid silently falling back to an insecure or unintended provider.
+- Explain when normal system DNS is being used.
+- Explain that DNS providers may observe domain lookups and that DNS filtering does not block every advertisement or webpage element.
+
+11. DOWNLOAD MANAGER
+
+Build a complete download manager.
+
+Features:
+
+- Display active and completed downloads.
+- Show progress, file name, file type, and available size information.
+- Support cancellation where supported.
+- Support retry after failure.
+- Open completed files using safe Android intents.
+- Handle file access permissions and modern Android storage restrictions.
+- Show appropriate notifications when permitted.
+- Prevent path traversal and unsafe file-name handling.
+- Handle duplicate names.
+- Display download errors clearly.
+- Provide a way to clear download history without deleting downloaded files accidentally.
+
+Never expose arbitrary filesystem paths or grant unsafe file access.
+
+12. BOOKMARKS, HISTORY, AND READING FEATURES
+
+Bookmarks
+
+- Add and remove bookmarks.
+- Edit title and URL.
+- Organize bookmarks into folders where practical.
+- Search bookmarks.
+- Preserve data across updates.
+- Include bookmarks in local backup.
+
+Browsing history
+
+- Record eligible normal browsing history.
+- Search and delete individual entries.
+- Clear history by supported time ranges.
+- Keep private browsing activity out of normal history.
+- Do not silently upload history.
+
+Reader Mode
+
+Implement Reader Mode where the page content can be extracted reliably.
+
+- Remove unnecessary page clutter.
+- Display readable article text.
+- Offer font-size controls and reading appearance options.
+- Provide dark/light reading themes.
+- Preserve basic article structure.
+- Show a clear fallback when a website cannot be converted.
+
+Do not pretend Reader Mode works on every page.
+
+Translation
+
+Provide a translation feature with an honest implementation.
+
+- Investigate suitable supported translation services or models.
+- Keep the browser usable when translation is unavailable.
+- Clearly distinguish online translation from offline translation.
+- Do not claim offline translation unless a usable local model or translation engine is actually packaged and integrated.
+- Explain if text is sent to an external translation service.
+- Avoid transmitting page content without an explicit user action.
+
+13. SECURE BROWSING AND PER-SITE CONTROLS
+
+Implement per-site controls for supported capabilities:
+
+- JavaScript.
+- Cookies and available site-storage controls.
+- Camera and microphone permissions.
+- Location.
+- Notifications.
+- Pop-ups where supported.
+- Other supported website permissions.
+
+Provide understandable defaults and allow users to change them.
+
+Be careful with JavaScript controls: disabling JavaScript can break websites. Explain this when appropriate.
+
+Also implement:
+
+- Safe handling of HTTP versus HTTPS indicators.
+- Secure certificate-error handling.
+- Safe external-link navigation.
+- Download and file-opening protections.
+- Clear permission prompts.
+- Protection against unsafe URL schemes and malformed input.
+- Secure defaults for new websites.
+
+Use supported GeckoView and Android APIs. Do not invent security features that the platform does not provide.
+
+14. SEPARATE BROWSER PROFILES
+
+Design and implement separate browser profiles if supported by the selected GeckoView architecture.
+
+The purpose is to isolate browsing data between profiles.
+
+Investigate whether separate GeckoView runtime directories, profiles, or supported session configurations can provide the required isolation.
+
+Where feasible, each profile should have separate:
+
+- Cookies.
+- Site storage.
+- Browsing history.
+- Session state.
+- Bookmarks or settings where appropriate.
+- Permission configuration.
+
+Clearly distinguish normal profiles from private tabs.
+
+If complete isolation requires a particular GeckoView runtime arrangement, implement and test it rather than creating multiple UI labels backed by the same storage.
+
+Do not claim separate cookie/storage isolation unless it is actually verified.
+
+15. DESKTOP MODE
+
+Provide a Desktop Mode option for supported websites.
+
+Requirements:
+
+- Request an appropriate desktop-style user agent or supported desktop browsing behavior.
+- Preserve normal mobile mode as the default.
+- Allow per-site or global preference where practical.
+- Handle reloads when switching modes.
+- Avoid changing unrelated browser settings.
+
+Explain that some websites will still display a mobile layout or may not work correctly in desktop mode.
+
+16. LOCAL BACKUP AND RESTORE CENTER
+
+Implement a Backup Center accessible from Settings.
+
+Support exporting and restoring appropriate local data, including:
+
+- Bookmarks.
+- Browser preferences.
+- Search engine settings.
+- Ad-blocker settings.
+- Website-blocking rules and lock metadata where appropriate.
+- Other supported user configuration.
+- Selected history data only if explicitly included and clearly disclosed.
+
+Use a suitable ZIP-based backup format with a manifest and version information.
+
+Backup requirements
+
+- Use Android's supported file-picker mechanisms.
+- Validate archive entries and file sizes.
+- Prevent ZIP path traversal.
+- Validate the backup version and schema.
+- Preview available backup contents before restoring.
+- Ask for confirmation before overwriting existing data.
+- Handle partial or invalid backups safely.
+- Preserve the existing database if restoration fails.
+- Implement migrations for older supported backup formats.
+- Offer export and import of bookmarks independently if practical.
+
+Do not include passwords, cookies, authentication tokens, or private browsing data by default.
+
+If a future feature exports sensitive data, require explicit informed consent and a suitable protection strategy.
+
+Keep the browser fully usable offline without an account or cloud service.
+
+17. PERFORMANCE, BATTERY, AND STABILITY
+
+Optimize the app for everyday Android phones, including devices with limited resources.
+
+Requirements:
+
+- Avoid unnecessary background services.
+- Avoid continuous polling and unnecessary timers.
+- Keep UI operations off the main thread when appropriate.
+- Prevent excessive recompositions and memory leaks.
+- Release unused sessions and resources correctly.
+- Cache filter data and processed rules.
+- Avoid blocking the UI while importing backups or updating lists.
+- Handle network loss and process recreation gracefully.
+- Avoid excessive disk writes.
+- Prevent repeated downloads of unchanged filter lists.
+- Use appropriate concurrency and cancellation.
+- Keep inactive-tab resource use reasonable without breaking user sessions.
+- Avoid aggressive automatic tab closure.
+- Preserve browser responsiveness during long downloads.
+- Handle empty files, very large files, malformed URLs, and storage failures.
+- Use profiling or tests where available to validate meaningful performance improvements.
+
+Do not disable normal security checks just to improve speed.
+
+Do not promise a specific performance improvement without measurements.
+
+18. SETTINGS ORGANIZATION
+
+Create a professional, searchable Settings screen with clear sections.
+
+Suggested sections:
+
+Appearance
+
+- Dark/light theme.
+- Homepage configuration.
+- Address bar and navigation preferences.
+
+Search
+
+- Default search engine.
+- Custom search configuration.
+
+Privacy & Security
+
+- Privacy dashboard.
+- Ad-blocking level.
+- Tracking protection.
+- Secure DNS.
+- Website blocking.
+- Adult website blocking.
+- Per-site permissions.
+- Clear browsing data.
+
+Browsing
+
+- Tab behavior.
+- Private browsing.
+- Desktop Mode.
+- Reader Mode.
+- Translation.
+
+Data & Storage
+
+- Bookmarks.
+- Downloads.
+- History.
+- Backup Center.
+- Profile management.
+
+Advanced
+
+- Supported extension management.
+- Filter list management.
+- Diagnostics and relevant engine information.
+
+About Pipra
+
+- Application version.
+- Developer attribution: Muhammad Omor.
+- Source code: https://github.com/omor-com/Pipra
+- Appropriate open-source license information, if verified from the repository.
+- Privacy policy link only if a real, verified policy is available.
+
+Do not invent a privacy policy URL or display product IDs, fake version details, or misleading security certifications.
+
+19. OFFLINE-FIRST ARCHITECTURE
+
+The browser must not require a user account or cloud connection to function.
+
+Keep locally available:
+
+- Bookmarks.
+- User preferences.
+- Tab metadata where safe.
+- History for normal browsing.
+- Custom website-blocking rules.
+- Lock expiration metadata.
+- Cached ad-blocking lists.
+- Cached adult-site lists.
+- Download history.
+- Backup files selected by the user.
+
+The internet is naturally required to load most websites and update online filter sources, but the browser's local interface, saved configuration, bookmarks, and cached filtering rules should remain usable offline.
+
+Do not send browsing history, bookmarks, custom domains, or other private data to a developer-controlled server without an explicit, justified feature and informed consent.
+
+Do not add analytics or tracking dependencies unnecessarily.
+
+20. ACCESSIBILITY AND USER EXPERIENCE
+
+- Support Android accessibility services.
+- Provide descriptive labels for interactive controls.
+- Keep text readable at larger font sizes.
+- Use clear error messages and confirmations.
+- Avoid relying only on color to communicate security states.
+- Avoid misleading permission requests.
+- Make destructive actions reversible where practical.
+- Confirm clearing data, deleting profiles, restoring backups, or resetting settings.
+- Preserve user-selected preferences.
+
+21. GITHUB ACTIONS — REPAIR THE REAL BUILD FAILURE
+
+The current repository has experienced an Android SDK setup failure involving a message similar to:
+
+"Wrong version in preinstalled sdkmanager"
+
+The subsequent Android SDK license step also failed.
+
+Investigate the actual workflow and logs before choosing a fix. Do not assume the Kotlin application code is responsible for an SDK installation failure.
+
+Workflow requirements
+
+- Inspect all existing workflow files.
+- Use a supported Java version compatible with the project's Gradle and Android Gradle Plugin.
+- Use a compatible Android SDK setup method.
+- Install the required SDK platform and build tools.
+- Accept SDK licenses through supported, noninteractive CI configuration.
+- Avoid relying on a broken preinstalled "sdkmanager".
+- Avoid conflicting Android SDK environment variables.
+- Pin or constrain important tool versions where appropriate.
+- Use Gradle Wrapper from the repository.
+- Enable Gradle caching safely.
+- Avoid exposing secrets in logs.
+- Preserve existing signing configuration if present, while improving its security where needed.
+
+Required build artifacts
+
+Provide workflows for:
+
+1. Debug APK builds.
+2. Signed release APK builds.
+3. Optional Android App Bundle builds when supported by the existing project.
+
+A successful debug build must generate an actual downloadable APK artifact.
+
+Release signing requirements:
+
+- Read signing information from GitHub Actions Secrets.
+- Do not commit keystores, passwords, private signing keys, or credentials.
+- Document the required secret names and expected formats.
+- Fail clearly if release-signing secrets are missing.
+- Never expose secret values in build logs.
+- Keep debug builds available without release-signing secrets.
+
+Use the actual project's application ID and build variants.
+
+Build verification
+
+Run the available build and test commands where the execution environment permits.
+
+At minimum, attempt relevant tasks such as:
+
+- Gradle configuration checks.
+- Kotlin compilation.
+- Unit tests.
+- Debug APK assembly.
+- Release APK assembly when signing credentials are available.
+
+If you cannot run a build locally, state that clearly and provide the exact GitHub Actions workflow that the user can run. Never report an unexecuted build as successful.
+
+22. TESTING REQUIREMENTS
+
+Implement tests for critical logic where practical, including:
+
+- Domain normalization and exact/subdomain matching.
+- Time-locked website rules and expiration.
+- Ad-blocking level configuration.
+- Filter-list update failure and last-known-good recovery.
+- Secure DNS configuration validation.
+- Bookmark persistence.
+- Private browsing data isolation.
+- Profile separation where implemented.
+- Backup archive validation and restoration.
+- Database migration.
+- Invalid URLs and unsafe schemes.
+
+Use actual engine callbacks and observable state when testing request blocking or privacy metrics.
+
+Perform manual verification where automated tests cannot fully cover browser behavior.
+
+23. IMPLEMENTATION PHASES — ALL FEATURES MUST REMAIN IN SCOPE
+
+Implement the complete feature set, but organize the work into practical phases so the foundation is stable before advanced features are added.
+
+Phase 1 — Core Browser Foundation
+
+- Inspect and preserve the existing project.
+- Repair the GitHub Actions SDK setup.
+- Integrate GeckoView.
+- Implement core navigation and browser lifecycle.
+- Build the premium homepage and address bar.
+- Implement tabs, tab groups, bookmarks, and normal history.
+- Implement private browsing.
+- Build the download manager.
+- Add dark/light themes.
+- Implement the core ad blocker.
+- Implement website and adult-site blocking.
+- Add the Privacy Dashboard.
+- Add essential error handling and tests.
+
+Phase 2 — Advanced Privacy and Data
+
+- Secure DNS with verified Kahf Guard configuration.
+- Custom DNS where supported.
+- Advanced filter-list management.
+- Extension-ready architecture and supported extension management.
+- Separate browser profiles with verified isolation.
+- Per-site controls.
+- Desktop Mode.
+- Local Backup and Restore Center.
+- Better data management and recovery.
+- Performance and battery optimization.
+
+Phase 3 — Reading, Translation, and Polish
+
+- Reader Mode.
+- Translation with transparent online/offline behavior.
+- Further UI polish.
+- Accessibility improvements.
+- Additional automated and manual tests.
+- Final stability fixes.
+- Complete build documentation.
+
+Do not omit any feature merely because it belongs to a later phase. If implementation must be staged, preserve a clear task list and continue through the phases rather than stopping after Phase 1.
+
+24. CODE QUALITY REQUIREMENTS
+
+- Use Kotlin and the existing project architecture wherever practical.
+- Prefer modular, maintainable code over one enormous Activity.
+- Separate UI, browser engine integration, storage, privacy logic, DNS configuration, filtering, and backup logic.
+- Use lifecycle-aware components.
+- Use appropriate coroutine scopes and cancellation.
+- Handle exceptions safely.
+- Keep dependencies compatible.
+- Avoid duplicate dependencies and unnecessary libraries.
+- Avoid deprecated APIs where supported alternatives exist.
+- Do not commit generated build output unnecessarily.
+- Do not introduce API keys or secrets into source code.
+- Do not use placeholders for core functionality.
+- Do not create fake data to make the UI look finished.
+- Preserve existing functionality unless a documented technical limitation requires a change.
+
+Do not add a backend, account system, cloud database, or mandatory subscription.
+
+25. REQUIRED DELIVERABLES
+
+When finished, provide:
+
+1. The upgraded project source code.
+2. A concise summary of the original repository structure and important preserved features.
+3. A list of implemented features.
+4. A list of features that remain incomplete, with precise reasons.
+5. A description of the GeckoView migration.
+6. A description of the actual ad-blocking architecture and its limitations.
+7. Verified details about the Kahf Guard DNS integration.
+8. An explanation of website-blocking lock limitations.
+9. The fixed GitHub Actions workflow files.
+10. Exact GitHub Secrets instructions for signed releases.
+11. Exact steps for building a debug APK.
+12. Exact steps for building a signed release APK.
+13. Test and build results, distinguishing successful, failed, skipped, and unverified checks.
+14. A downloadable debug APK or release artifact if the environment can genuinely build and provide one.
+15. Any necessary migration notes for existing users.
+
+If you modify files, ensure the complete updated source is saved in the working project. If the environment supports returning a ZIP of the updated source, provide that artifact.
+
+Do not claim to have uploaded changes to GitHub, executed GitHub Actions, generated an APK, or tested functionality unless those actions actually occurred.
+
+26. FINAL ACCEPTANCE CHECKLIST
+
+Before declaring completion, verify each applicable requirement:
+
+- [ ] Existing repository inspected.
+- [ ] Existing app ID preserved.
+- [ ] Existing working features retained or documented.
+- [ ] GeckoView integrated with correct lifecycle management.
+- [ ] Premium dark/light browser UI implemented.
+- [ ] Search providers configurable.
+- [ ] Tabs and tab groups functional.
+- [ ] Private browsing implemented with verified isolation.
+- [ ] Bookmarks and normal history functional.
+- [ ] Download manager functional.
+- [ ] Ad-blocking levels have real, distinct behavior.
+- [ ] Filter-list updates and failure recovery implemented.
+- [ ] Website and adult-site blocking functional.
+- [ ] Time-locked rules persist and expire correctly.
+- [ ] Privacy Dashboard uses real available data.
+- [ ] Kahf Guard DNS endpoints and protocol verified.
+- [ ] Medium DNS profile selected by default.
+- [ ] Custom DNS and Off modes behave honestly.
+- [ ] Extension support accurately reflects GeckoView capabilities.
+- [ ] Reader Mode implemented.
+- [ ] Translation limitations documented.
+- [ ] Per-site controls implemented.
+- [ ] Separate profiles verified where supported.
+- [ ] Desktop Mode implemented.
+- [ ] Backup and Restore Center validated.
+- [ ] Offline-first local storage maintained.
+- [ ] Performance and battery behavior reviewed.
+- [ ] GitHub Actions SDK setup repaired.
+- [ ] Debug APK build verified where execution is possible.
+- [ ] Release build and signing documented and verified where credentials are available.
+- [ ] No secrets committed.
+- [ ] No fake functionality or misleading security claims.
+- [ ] All incomplete items clearly documented.
+
+FINAL INSTRUCTION
+
+Start by inspecting the uploaded ZIP and identifying the real project structure and build failure. Then implement the browser upgrade directly in the existing codebase.
+
+Do not stop after producing a design, architecture document, checklist, sample screen, or code snippets. Make the actual changes wherever the environment permits, verify them, and report the results honestly.
+
+Preserve the identity and existing functionality of Pipra. Prioritize security, speed, and a professional user experience together.
+
+The result should be a genuinely usable Android browser project that I can build using GitHub Actions from my phone—not a mockup or a collection of disconnected examples.
