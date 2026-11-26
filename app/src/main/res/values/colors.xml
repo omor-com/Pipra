@@ -1,0 +1,15 @@
+<resources>
+    <color name="toolbar">#14161A</color>
+    <color name="toolbar_dark">#0B0C0E</color>
+    <color name="surface_card">#1A1D23</color>
+    <color name="accent">#3B82F6</color>
+    <color name="accent_bright">#60A5FA</color>
+    <color name="text">#E6E8EC</color>
+    <color name="text_dim">#9CA3AF</color>
+    <color name="border_silver">#2E333D</color>
+    <color name="tab_active">#252932</color>
+    <color name="tab_inactive">#17191E</color>
+    <color name="white">#FFFFFF</color>
+    <color name="private_bar">#101520</color>
+    <color name="private_dark">#080A0F</color>
+</resources>

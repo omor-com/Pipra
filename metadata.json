@@ -1,0 +1,6 @@
+{
+  "name": "Pipra",
+  "description": "Pipra — Private Android Web Browser by Muhammad Omor with tiered ad blocking, 7–365 day locked website blocking, adult website protection, and hardened WebView privacy.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

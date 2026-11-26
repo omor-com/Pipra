@@ -1,0 +1,22 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.Pipra" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorSecondary">@color/accent_bright</item>
+        <item name="android:statusBarColor" tools:targetApi="21">@color/toolbar_dark</item>
+        <item name="android:navigationBarColor">@color/toolbar_dark</item>
+        <item name="android:windowBackground">@color/toolbar_dark</item>
+    </style>
+
+    <style name="ToolIcon">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:scaleType">fitCenter</item>
+        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+    </style>
+
+    <style name="NavIcon" parent="ToolIcon">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:padding">12dp</item>
+    </style>
+</resources>

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- allowBackup off: cookies, history, sessions, and blocking rules must never leave the device via backups. -->
+    <application
+        android:name="com.pipra.browser.PipraApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
+        android:theme="@style/Theme.Pipra">
+
+        <activity
+            android:name="com.pipra.browser.SplashActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Pipra">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name="com.pipra.browser.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode">
+            <!-- Lets Pipra be picked as the browser for links from other apps. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+            </intent-filter>
+        </activity>
+
+        <!-- Private window: separate process = separate WebView data dir = separate cookie jar. -->
+        <activity
+            android:name="com.pipra.browser.PrivateActivity"
+            android:exported="false"
+            android:process=":incognito"
+            android:taskAffinity="com.pipra.browser.app.incognito"
+            android:launchMode="singleTask"
+            android:label="Pipra Private"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode" />
+
+        <activity
+            android:name="com.pipra.browser.SettingsActivity"
+            android:exported="false"
+            android:label="@string/settings_title"
+            android:theme="@style/Theme.Pipra" />
+
+    </application>
+</manifest>
