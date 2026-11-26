@@ -81,11 +81,14 @@ class Store(private val context: Context) {
         const val DEFAULT_HOMEPAGE = "pipra://home"
 
         val SEARCH_ENGINES = linkedMapOf(
+            "Google" to "https://www.google.com/search?q=",
             "DuckDuckGo" to "https://duckduckgo.com/?q=",
+            "Bing" to "https://www.bing.com/search?q=",
             "Brave" to "https://search.brave.com/search?q=",
             "Startpage" to "https://www.startpage.com/sp/search?query=",
-            "Google" to "https://www.google.com/search?q=",
-            "Bing" to "https://www.bing.com/search?q="
+            "Yahoo" to "https://search.yahoo.com/search?p=",
+            "Ecosia" to "https://www.ecosia.org/search?q=",
+            "Qwant" to "https://www.qwant.com/?q="
         )
     }
 
@@ -207,7 +210,7 @@ class Store(private val context: Context) {
     }
 
     var adultProtectionEnabled: Boolean
-        get() = readPolicyBool("adult_protection", false)
+        get() = readPolicyBool("adult_protection", true)
         set(v) = writePolicyBool("adult_protection", v)
 
     var adultLastUpdatedMillis: Long

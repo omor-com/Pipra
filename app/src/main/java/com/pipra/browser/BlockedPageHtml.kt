@@ -162,85 +162,88 @@ object BlockedPageHtml {
             "<div class='empty'>No bookmarks yet. Tap the star in the menu to save sites locally.</div>"
         } else {
             bookmarks.take(8).joinToString("") { b ->
-                val title = Codec.htmlEncode(b.title.ifBlank { b.url }.take(36))
+                val title = Codec.htmlEncode(b.title.ifBlank { b.url }.take(32))
                 val url = Codec.htmlEncode(b.url)
                 val host = Codec.htmlEncode(DomainUtils.extractHostFromUrl(b.url) ?: b.url)
-                "<a class='bm' href='$url'><div class='bm-title'>$title</div><div class='bm-host'>$host</div></a>"
+                val initial = host.take(1).uppercase()
+                """
+                <a class='shortcut' href='$url'>
+                  <div class='shortcut-icon'>$initial</div>
+                  <div class='shortcut-label'>$title</div>
+                </a>
+                """.trimIndent()
             }
         }
         val shieldsLabel = if (adBlockEnabled) "${adBlockMode.label} · $totalBlocked blocked" else "Paused"
-        val adultLabel = if (adultProtectionEnabled) "Active" else "Off"
+        val adultLabel = if (adultProtectionEnabled) "Active (Default)" else "Off"
 
         return """
             <!DOCTYPE html>
-            <html>
+            <html lang="en">
             <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width,initial-scale=1">
-              <title>Pipra</title>
-              <style>
-                body {
-                  margin: 0; padding: 24px 18px 40px;
-                  background: #0B0C0E; color: #E6E8EC;
-                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                }
-                .wrap { max-width: 560px; margin: 18px auto 0; }
-                .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
-                .badge-icon {
-                  width: 44px; height: 44px; border-radius: 12px;
-                  background: #1A1D23; border: 1px solid #2E333D;
-                  display: flex; align-items: center; justify-content: center;
-                  font-weight: 800; color: #3B82F6; font-size: 18px;
-                }
-                h1 { margin: 0; font-size: 24px; letter-spacing: 0.03em; color: #FFFFFF; }
-                .sub { font-size: 13px; color: #9CA3AF; margin-top: 2px; }
-                .grid {
-                  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-                  margin-bottom: 22px;
-                }
-                .stat {
-                  background: #14161A; border: 1px solid #2A2F3A;
-                  border-radius: 12px; padding: 12px;
-                }
-                .stat-k { font-size: 11px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.05em; }
-                .stat-v { font-size: 13px; color: #E6E8EC; font-weight: 600; margin-top: 4px; }
-                .accent { color: #60A5FA; }
-                .sec-title { font-size: 12px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 10px; }
-                .bm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-                .bm {
-                  display: block; text-decoration: none;
-                  background: #14161A; border: 1px solid #2A2F3A;
-                  border-radius: 12px; padding: 12px;
-                }
-                .bm-title { font-size: 14px; font-weight: 600; color: #E6E8EC; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                .bm-host { font-size: 12px; color: #9CA3AF; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                .empty {
-                  background: #14161A; border: 1px dashed #2E333D;
-                  border-radius: 12px; padding: 16px; font-size: 13px; color: #9CA3AF;
-                }
-              </style>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+            <meta name="theme-color" content="#030303">
+            <title>Pipra Browser</title>
+            <style>
+            :root{color-scheme:dark;--red:#3B82F6;--bg:#030303;--text:#f7f7f8;--muted:#aeb0b6;--panel:#14161A;--border:#2E333D}
+            *{box-sizing:border-box}
+            html,body{margin:0;width:100%;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+            body{min-height:100svh;overflow-x:hidden}
+            .page{position:relative;isolation:isolate;min-height:100svh;display:flex;flex-direction:column;align-items:center;padding:32px 16px 60px;background:radial-gradient(ellipse at 50% 35%,#121620 0%,#030303 65%,#000 100%)}
+            .brand{display:flex;flex-direction:column;align-items:center;margin:24px 0 28px;text-align:center}
+            .ant-logo{width:84px;height:84px;border-radius:24px;background:#101319;border:1px solid var(--border);display:grid;place-items:center;box-shadow:0 8px 24px rgba(59,130,246,0.15);margin-bottom:12px;font-size:36px;font-weight:800;color:#60A5FA}
+            h1{margin:0;font-size:26px;font-weight:700;letter-spacing:0.04em;color:#FFFFFF}
+            .sub{font-size:13px;color:var(--muted);margin-top:4px}
+            
+            .search-box{width:100%;max-width:620px;height:56px;display:flex;align-items:center;gap:12px;padding:0 12px 0 16px;border-radius:999px;border:1px solid var(--border);background:linear-gradient(135deg,rgba(25,28,34,.95),rgba(15,18,22,.97));box-shadow:0 8px 32px rgba(0,0,0,0.3);margin-bottom:28px}
+            .search-box input{min-width:0;flex:1;background:transparent;border:0;outline:0;color:#f7f7f8;font-size:16px;font-family:inherit}
+            .search-box input::placeholder{color:var(--muted)}
+            .search-btn{width:40px;height:40px;border:0;border-radius:50%;background:#3B82F6;color:white;display:grid;place-items:center;cursor:pointer;font-weight:bold}
+            
+            .stats-grid{width:100%;max-width:620px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:28px}
+            .stat{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:12px;text-align:center}
+            .stat-k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em}
+            .stat-v{font-size:13px;color:#E6E8EC;font-weight:600;margin-top:4px}
+            .accent{color:#60A5FA}
+            
+            .section-title{width:100%;max-width:620px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin:0 0 12px}
+            .shortcuts-grid{width:100%;max-width:620px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+            .shortcut{display:flex;flex-direction:column;align-items:center;gap:8px;color:#eee;text-decoration:none;font-size:12px;text-align:center}
+            .shortcut-icon{width:56px;height:56px;border-radius:18px;background:var(--panel);border:1px solid var(--border);display:grid;place-items:center;font-size:20px;font-weight:600;color:#60A5FA;box-shadow:0 4px 12px rgba(0,0,0,0.2)}
+            .shortcut-label{width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#C8CDD5;font-size:12px}
+            .empty{width:100%;max-width:620px;background:var(--panel);border:1px dashed var(--border);border-radius:14px;padding:20px;text-align:center;color:var(--muted);font-size:13px}
+            </style>
             </head>
             <body>
-              <div class="wrap">
-                <div class="brand">
-                  <div class="badge-icon">P</div>
-                  <div>
-                    <h1>Pipra</h1>
-                    <div class="sub">Private Android Web Browser · Offline-First Protection</div>
-                  </div>
-                </div>
-                <div class="grid">
-                  <div class="stat"><div class="stat-k">Ad Blocker</div><div class="stat-v accent">$shieldsLabel</div></div>
-                  <div class="stat"><div class="stat-k">Site Locks</div><div class="stat-v">$lockedRuleCount rule(s)</div></div>
-                  <div class="stat"><div class="stat-k">Adult Guard</div><div class="stat-v">$adultLabel</div></div>
-                </div>
-                <div class="sec-title">Bookmarks</div>
-                ${if (bookmarks.isEmpty()) bookmarkItems else "<div class='bm-grid'>$bookmarkItems</div>"}
+            <div class="page">
+              <div class="brand">
+                <div class="ant-logo">🐜</div>
+                <h1>Pipra</h1>
+                <div class="sub">Private Android Web Browser · Chrome UI & Privacy Engine</div>
               </div>
+              
+              <form class="search-box" action="https://www.google.com/search" method="GET" onsubmit="event.preventDefault(); var q=this.q.value; if(q){location.href=(q.startsWith('http://')||q.startsWith('https://')||q.includes('.'))?(q.includes('://')?q:'https://'+q):'https://www.google.com/search?q='+encodeURIComponent(q)}">
+                <input type="text" name="q" placeholder="Search with Google or type URL..." autocomplete="off" autofocus>
+                <button type="submit" class="search-btn" aria-label="Search">🔍</button>
+              </form>
+              
+              <div class="stats-grid">
+                <div class="stat"><div class="stat-k">Ad Blocker</div><div class="stat-v accent">$shieldsLabel</div></div>
+                <div class="stat"><div class="stat-k">Site Locks</div><div class="stat-v">$lockedRuleCount rules</div></div>
+                <div class="stat"><div class="stat-k">Adult Guard</div><div class="stat-v accent">$adultLabel</div></div>
+              </div>
+              
+              <div class="section-title">Shortcuts & Bookmarks</div>
+              <div class="${if (bookmarks.isEmpty()) "" else "shortcuts-grid"}">
+                $bookmarkItems
+              </div>
+            </div>
             </body>
             </html>
         """.trimIndent()
     }
+
 
     fun privateLandingHtml(): String = """
         <!DOCTYPE html>
