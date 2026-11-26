@@ -35,11 +35,9 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Prepare debug keystore for debug APK signing
+      - name: Generate debug keystore for debug APK signing
         run: |
-          if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
-          fi
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Run unit and Robolectric tests
         run: gradle :app:testDebugUnitTest --no-daemon
