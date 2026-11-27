@@ -5,7 +5,6 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
-import android.webkit.WebView
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -28,7 +27,7 @@ internal class BrowserDevDialogs(
     private val isPrivate: Boolean,
     private val store: Store,
     private val dev: DevStore,
-    private val currentWebView: () -> WebView?,
+    private val currentSession: () -> BrowserSessionHandle?,
     private val applySettingsToTabs: () -> Unit,
     private val copyText: (String, String) -> Unit,
     private val toast: (String) -> Unit,
@@ -94,7 +93,7 @@ internal class BrowserDevDialogs(
             col.addView(menuRow2(label, sub) { sheet.dismiss(); action() })
         }
         row("HTTP history", "Requests made by this browser — send to Repeater, export HAR / cURL") { showNetworkInspector() }
-        row("Repeater", "Edit method, URL, headers, or body and resend") { showRepeater("GET", currentWebView()?.url ?: "https://", "", "") }
+        row("Repeater", "Edit method, URL, headers, or body and resend") { showRepeater("GET", currentSession()?.url ?: "https://", "", "") }
         row("Passive scanner", "Read-only checks: security headers, cookie flags, mixed content") { showScanner() }
         row("Target & scope", "Limit tools to authorized hosts") { showScope() }
         row("Encoder / Decoder", "Base64, URL, HTML, hex, JWT, hashes, JSON, unicode, timestamp") { showDecoder() }
@@ -289,7 +288,7 @@ internal class BrowserDevDialogs(
     }
 
     private fun showScanner() {
-        val url = currentWebView()?.url
+        val url = currentSession()?.url
         if (url?.startsWith("http") != true) { toast("Open a website first"); return }
         if (isBlockedDestination(url)) { toast("Blocked by Pipra rules"); return }
         if (!dev.inScope(url)) { toast("This host is out of scope — add it in Target & scope"); return }
@@ -479,18 +478,19 @@ internal class BrowserDevDialogs(
     }
 
     private fun showStorageEditor() {
-        val wv = currentWebView() ?: return
+        val wv = currentSession() ?: return
         if (wv.url?.startsWith("http") != true) { toast("Open a website first"); return }
         val js = """(function(){function d(s){var o={};try{for(var i=0;i<s.length;i++){var k=s.key(i);o[k]=s.getItem(k);}}catch(e){}return o;}
             return JSON.stringify({local:d(localStorage),session:d(sessionStorage)});})();"""
         wv.evaluateJavascript(js) { raw ->
+            if (raw.isNullOrBlank()) { toast("Storage inspection unavailable for this session"); return@evaluateJavascript }
             val json = try { org.json.JSONObject(org.json.JSONTokener(raw).nextValue() as String) } catch (_: Exception) { null }
             if (json == null) { toast("Couldn't read storage (is JS enabled?)"); return@evaluateJavascript }
             renderStorage(wv, json)
         }
     }
 
-    private fun renderStorage(wv: WebView, json: org.json.JSONObject) {
+    private fun renderStorage(wv: BrowserSessionHandle, json: org.json.JSONObject) {
         val local = json.optJSONObject("local") ?: org.json.JSONObject()
         val session = json.optJSONObject("session") ?: org.json.JSONObject()
         data class Item(val area: String, val key: String, val value: String)
@@ -527,7 +527,7 @@ internal class BrowserDevDialogs(
         dialog.show()
     }
 
-    private fun editStorageItem(wv: WebView, area: String, key: String, value: String) {
+    private fun editStorageItem(wv: BrowserSessionHandle, area: String, key: String, value: String) {
         val col = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
         val areas = listOf("local", "session")
         val spin = android.widget.Spinner(activity).apply {
@@ -556,9 +556,10 @@ internal class BrowserDevDialogs(
         "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "") + "\""
 
     private fun viewSource() {
-        val wv = currentWebView() ?: return
+        val wv = currentSession() ?: return
         if (wv.url?.startsWith("http") != true) { toast("Open a website first"); return }
         wv.evaluateJavascript("document.documentElement.outerHTML") { raw ->
+            if (raw.isNullOrBlank()) { toast("Source view unavailable for this session"); return@evaluateJavascript }
             val html = try { org.json.JSONTokener(raw).nextValue() as? String ?: raw } catch (_: Exception) { raw }
             val tv = TextView(activity).apply {
                 text = html; setTextIsSelectable(true); setPadding(dp(16), dp(12), dp(16), dp(12))
@@ -587,7 +588,7 @@ internal class BrowserDevDialogs(
                 store.blockImages = !img.second.isChecked
                 CookieManager.getInstance().setAcceptCookie(cookies.second.isChecked)
                 applySettingsToTabs()
-                currentWebView()?.reload()
+                currentSession()?.reload()
                 toast("Applied")
             }
             .setNegativeButton("Cancel", null)

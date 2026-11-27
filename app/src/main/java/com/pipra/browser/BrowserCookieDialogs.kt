@@ -5,7 +5,6 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
-import android.webkit.WebView
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -22,8 +21,7 @@ import com.example.R
 internal class BrowserCookieDialogs(
     private val activity: MainActivity,
     private val isPrivate: Boolean,
-    private val currentWebView: () -> WebView?,
-    private val navigateTo: (WebView, String) -> Unit,
+    private val currentSession: () -> BrowserSessionHandle?,
     private val resolveUrl: (String) -> String,
     private val openFileImport: (format: String) -> Unit,
     private val exportFile: (format: String, text: String) -> Unit,
@@ -70,7 +68,7 @@ internal class BrowserCookieDialogs(
     }
 
     private fun currentHttpUrl(): String? =
-        currentWebView()?.url?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        currentSession()?.url?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
             ?: run { toast("Open a website first"); null }
 
     private fun viewCookies() {
@@ -99,7 +97,7 @@ internal class BrowserCookieDialogs(
         val urlField = EditText(activity).apply {
             hint = "Target site, e.g. example.com or https://example.com"
             setSingleLine(true)
-            currentWebView()?.url?.takeIf { it.startsWith("http") }?.let { setText(it) }
+            currentSession()?.url?.takeIf { it.startsWith("http") }?.let { setText(it) }
         }
         val cookieField = EditText(activity).apply {
             hint = "Paste cookies: JSON array, Netscape cookies.txt, or name=value; name2=value2"
@@ -125,7 +123,7 @@ internal class BrowserCookieDialogs(
                 }
                 val n = injectCookieText(text, fmt, fallbackDomain = host, secure = target.startsWith("https"))
                 if (n > 0) confirm("Injected $n cookie(s) for $host. Open the site now?") {
-                    currentWebView()?.let { navigateTo(it, target) }
+                    currentSession()?.navigate(target)
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -160,7 +158,7 @@ internal class BrowserCookieDialogs(
         reload: Boolean = fallbackDomain == null
     ): Int {
         val fallback = fallbackDomain
-            ?: currentWebView()?.url?.takeIf { it.startsWith("http") }?.let { Uri.parse(it).host }
+            ?: currentSession()?.url?.takeIf { it.startsWith("http") }?.let { Uri.parse(it).host }
         val cookies = try {
             when (format) {
                 "netscape" -> CookieIO.parseNetscape(text)
@@ -181,7 +179,7 @@ internal class BrowserCookieDialogs(
             try { cm.setCookie(CookieIO.urlFor(c), CookieIO.setCookieString(c)); ok++ } catch (_: Exception) {}
         }
         cm.flush()
-        if (reload) currentWebView()?.reload()
+        if (reload) currentSession()?.reload()
         toast("Injected $ok of ${resolved.size} cookie(s)" + if (isPrivate) " into private window" else "")
         return ok
     }
@@ -223,7 +221,7 @@ internal class BrowserCookieDialogs(
             cm.flush()
             val remaining = CookieManager.getInstance().getCookie(url)
                 ?.split(";")?.count { it.substringBefore("=").trim().isNotEmpty() } ?: 0
-            currentWebView()?.reload()
+            currentSession()?.reload()
             if (remaining == 0) toast("Cleared all cookies for $host")
             else toast("Cleared ${names.size - remaining} of ${names.size}; $remaining couldn't be removed")
         }

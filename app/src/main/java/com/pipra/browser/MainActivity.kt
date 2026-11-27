@@ -1,19 +1,13 @@
 package com.pipra.browser
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
-import android.graphics.Bitmap
 import android.graphics.drawable.GradientDrawable
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
-import android.net.http.SslError
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.os.Message
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.TypedValue
@@ -25,20 +19,7 @@ import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
-import android.webkit.GeolocationPermissions
-import android.webkit.PermissionRequest
-import android.webkit.RenderProcessGoneDetail
-import android.webkit.SslErrorHandler
 import android.webkit.URLUtil
-import android.webkit.ValueCallback
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
-import android.webkit.WebStorage
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.EditText
@@ -63,43 +44,49 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.example.R
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.DateFormat
 import java.util.Date
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.absoluteValue
+import org.mozilla.geckoview.AllowOrDeny
+import org.mozilla.geckoview.GeckoResult
+import org.mozilla.geckoview.GeckoRuntime
+import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.GeckoSessionSettings
+import org.mozilla.geckoview.GeckoView
+import org.mozilla.geckoview.WebRequestError
+import org.mozilla.geckoview.WebResponse
 
 open class MainActivity : AppCompatActivity() {
 
     companion object {
         const val DESKTOP_UA =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0"
         private const val PRIVATE_HOME = "about:blank"
         private const val DONATE_URL = "https://www.supportkori.com/muhammedomor"
         private const val MAX_CLOSED_TABS = 20
-
-        const val DESKTOP_SPOOF_JS = """
-            (function(){try{
-              Object.defineProperty(navigator,'maxTouchPoints',{get:function(){return 0;},configurable:true});
-              Object.defineProperty(navigator,'platform',{get:function(){return 'Win32';},configurable:true});
-              Object.defineProperty(navigator,'userAgentData',{get:function(){return undefined;},configurable:true});
-              try{delete window.ontouchstart;}catch(e){}
-              Object.defineProperty(window,'ontouchstart',{get:function(){return undefined;},configurable:true});
-              var mm=window.matchMedia;
-              window.matchMedia=function(q){var r=mm(q);if(/pointer:\s*coarse|hover:\s*none|any-pointer:\s*coarse/.test(q)){try{Object.defineProperty(r,'matches',{get:function(){return false;}});}catch(e){}}return r;};
-            }catch(e){}})();
-        """
     }
 
     protected open val isPrivate: Boolean = false
 
-    private class Tab(val webView: WebView, val chip: View, val titleView: TextView, val closeView: TextView) {
+    private class Tab(
+        val session: GeckoSession,
+        val chip: View,
+        val titleView: TextView,
+        val closeView: TextView
+    ) {
         var title: String = "New Tab"
         var desktop: Boolean = false
-        var spoofScript: androidx.webkit.ScriptHandler? = null
+        var canGoBack: Boolean = false
+        var canGoForward: Boolean = false
+        var historyCurrentIndex: Int = 0
+        val historyEntries: MutableList<Pair<String, String>> = mutableListOf()
         val blocked = AtomicInteger(0)
         @Volatile var currentUrl: String? = null
         @Volatile var lastFailedUrl: String? = null
+        @Volatile var internalRoute: String? = null
     }
 
     private data class ClosedTabRecord(
@@ -111,7 +98,7 @@ open class MainActivity : AppCompatActivity() {
     private val tabs = mutableListOf<Tab>()
     private val closedTabs = ArrayDeque<ClosedTabRecord>()
     private var currentIndex = -1
-    private var lastAppliedDark: Boolean? = null
+    private var isFullscreen = false
 
     private lateinit var store: Store
     private lateinit var dev: DevStore
@@ -121,6 +108,8 @@ open class MainActivity : AppCompatActivity() {
     private lateinit var ruleEngine: RuleEngine
     private lateinit var cookieDialogs: BrowserCookieDialogs
     private lateinit var devDialogs: BrowserDevDialogs
+    private lateinit var geckoRuntime: GeckoRuntime
+    private lateinit var geckoView: GeckoView
 
     private lateinit var rootView: View
     private lateinit var tabStrip: View
@@ -145,14 +134,30 @@ open class MainActivity : AppCompatActivity() {
     private val httpAllowed = mutableSetOf<String>()
     private val upgradedHosts = mutableSetOf<String>()
 
-    private var customView: View? = null
-    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
-
-    private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private var pendingFilePromptResult: GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? = null
+    private var pendingFilePrompt: GeckoSession.PromptDelegate.FilePrompt? = null
     private val pickFiles =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            fileCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data))
-            fileCallback = null
+            val prompt = pendingFilePrompt
+            val res = pendingFilePromptResult
+            pendingFilePrompt = null
+            pendingFilePromptResult = null
+            if (prompt != null && res != null) {
+                val clip = result.data?.clipData
+                val single = result.data?.data
+                val uris = when {
+                    result.resultCode != RESULT_OK -> null
+                    clip != null && clip.itemCount > 0 ->
+                        Array(clip.itemCount) { i -> clip.getItemAt(i).uri }
+                    single != null -> arrayOf(single)
+                    else -> null
+                }
+                if (uris != null && uris.isNotEmpty()) {
+                    res.complete(prompt.confirm(this, uris))
+                } else {
+                    res.complete(prompt.dismiss())
+                }
+            }
         }
 
     private var pendingImportFormat: String = "json"
@@ -194,12 +199,12 @@ open class MainActivity : AppCompatActivity() {
         adultBlocker = AdultBlockerEngine(this)
         ruleEngine = RuleEngine(dev) { url -> isBlockedDestination(url) }
         PipraDownloadManager.ensureInitialized(this)
+        geckoRuntime = PipraGeckoRuntime.getOrCreate(this, store)
 
         cookieDialogs = BrowserCookieDialogs(
             activity = this,
             isPrivate = isPrivate,
-            currentWebView = { current()?.webView },
-            navigateTo = { wv, u -> navigate(wv, u) },
+            currentSession = { currentSessionHandle() },
             resolveUrl = { DomainUtils.resolveOmniboxInput(it, store.searchTemplate(), homeUrl) },
             openFileImport = { fmt ->
                 pendingImportFormat = fmt
@@ -220,7 +225,7 @@ open class MainActivity : AppCompatActivity() {
             isPrivate = isPrivate,
             store = store,
             dev = dev,
-            currentWebView = { current()?.webView },
+            currentSession = { currentSessionHandle() },
             applySettingsToTabs = ::applySettingsToAllTabs,
             copyText = ::copyText,
             toast = ::toast,
@@ -248,6 +253,14 @@ open class MainActivity : AppCompatActivity() {
         findNext = findViewById(R.id.findNext)
         findClose = findViewById(R.id.findClose)
 
+        geckoView = GeckoView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        webContainer.addView(geckoView)
+
         if (isPrivate) applyPrivateLook() else applyThemeLook()
         tabStrip.visibility = if (store.showTabStrip) View.VISIBLE else View.GONE
 
@@ -255,16 +268,15 @@ open class MainActivity : AppCompatActivity() {
 
         btnReload.setOnClickListener {
             val tab = current() ?: return@setOnClickListener
-            val u = tab.currentUrl
-            if (u == Store.DEFAULT_HOMEPAGE) loadInto(tab.webView, Store.DEFAULT_HOMEPAGE)
-            else tab.webView.reload()
+            if (tab.currentUrl == Store.DEFAULT_HOMEPAGE) loadInto(tab, Store.DEFAULT_HOMEPAGE)
+            else tab.session.reload()
         }
         btnNewTab.setOnClickListener { createTab(homeUrl) }
         btnMenu.setOnClickListener { showMenu() }
-        btnHome.setOnClickListener { current()?.webView?.let { loadInto(it, homeUrl) } }
+        btnHome.setOnClickListener { current()?.let { loadInto(it, homeUrl) } }
 
-        btnBack.setOnClickListener { current()?.webView?.let { if (it.canGoBack()) it.goBack() } }
-        btnForward.setOnClickListener { current()?.webView?.let { if (it.canGoForward()) it.goForward() } }
+        btnBack.setOnClickListener { current()?.let { if (it.canGoBack) it.session.goBack() } }
+        btnForward.setOnClickListener { current()?.let { if (it.canGoForward) it.session.goForward() } }
         btnBack.setOnLongClickListener { showNavHistory(); true }
         btnForward.setOnLongClickListener { showNavHistory(); true }
 
@@ -278,11 +290,14 @@ open class MainActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                val wv = current()?.webView
+                val tab = current()
                 when {
-                    customView != null -> exitFullscreen()
+                    isFullscreen -> {
+                        tab?.session?.exitFullScreen()
+                        exitFullscreenUi()
+                    }
                     findBar.visibility == View.VISIBLE -> closeFind()
-                    wv != null && wv.canGoBack() -> wv.goBack()
+                    tab != null && tab.canGoBack -> tab.session.goBack()
                     tabs.size > 1 -> closeTab(currentIndex)
                     else -> closeWindow()
                 }
@@ -296,20 +311,16 @@ open class MainActivity : AppCompatActivity() {
         super.onResume()
         if (::store.isInitialized) {
             tabStrip.visibility = if (store.showTabStrip) View.VISIBLE else View.GONE
-            if (!isPrivate) {
-                applyThemeLook()
-            }
+            if (!isPrivate) applyThemeLook()
             applySettingsToAllTabs()
-            // Refresh Pipra Home tabs if theme or search engine changed while away, without reloading web tabs.
             tabs.forEach { tab ->
                 if (tab.currentUrl == Store.DEFAULT_HOMEPAGE) {
-                    loadInto(tab.webView, Store.DEFAULT_HOMEPAGE)
+                    loadInto(tab, Store.DEFAULT_HOMEPAGE)
                 }
             }
-            // Re-enforce blocking immediately if user added a rule in Settings and returned.
             current()?.let { tab ->
-                val url = tab.webView.url
-                if (url != null && checkBlockedAndRender(tab.webView, url)) {
+                val url = tab.currentUrl
+                if (url != null && checkBlockedAndRender(tab, url)) {
                     setUrlBarText("")
                 }
             }
@@ -329,7 +340,12 @@ open class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         if (isPrivate && isFinishing) erasePrivateData()
-        for (t in tabs) t.webView.destroy()
+        if (::geckoView.isInitialized) {
+            try { geckoView.releaseSession() } catch (_: Exception) {}
+        }
+        for (t in tabs) {
+            try { t.session.close() } catch (_: Exception) {}
+        }
         tabs.clear()
         super.onDestroy()
         if (isPrivate && isFinishing) android.os.Process.killProcess(android.os.Process.myPid())
@@ -343,10 +359,25 @@ open class MainActivity : AppCompatActivity() {
     }
 
     private fun erasePrivateData() {
-        CookieManager.getInstance().removeAllCookies(null)
-        CookieManager.getInstance().flush()
-        WebStorage.getInstance().deleteAllData()
-        for (t in tabs) { t.webView.clearCache(true); t.webView.clearHistory(); t.webView.clearFormData() }
+        try {
+            CookieManager.getInstance().removeAllCookies(null)
+            CookieManager.getInstance().flush()
+        } catch (_: Exception) {}
+        for (t in tabs) {
+            try { t.session.close() } catch (_: Exception) {}
+        }
+    }
+
+    private fun currentSessionHandle(): BrowserSessionHandle? {
+        val tab = current() ?: return null
+        return object : BrowserSessionHandle {
+            override val url: String? get() = tab.currentUrl
+            override fun reload() = tab.session.reload()
+            override fun navigate(url: String) = this@MainActivity.navigate(tab, url)
+            override fun evaluateJavascript(script: String, callback: ((String?) -> Unit)?) {
+                callback?.invoke(null)
+            }
+        }
     }
 
     private fun isDarkUi(): Boolean = isPrivate || store.isDarkThemeEffective()
@@ -417,7 +448,6 @@ open class MainActivity : AppCompatActivity() {
         controller.isAppearanceLightNavigationBars = !dark
 
         refreshTabChipsAppearance()
-        lastAppliedDark = dark
     }
 
     private fun applyPrivateLook() {
@@ -470,8 +500,6 @@ open class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ---- Connectivity check ------------------------------------------------
-
     private fun isDeviceOffline(): Boolean {
         return try {
             val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -483,8 +511,6 @@ open class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ---- Blocking gate -----------------------------------------------------
-
     private fun isBlockedDestination(url: String): Boolean {
         if (!url.startsWith("http://") && !url.startsWith("https://")) return false
         if (websiteBlocker.findMatchingRuleForUrl(url) != null) return true
@@ -492,227 +518,60 @@ open class MainActivity : AppCompatActivity() {
         return false
     }
 
-    private fun checkBlockedAndRender(webView: WebView, url: String): Boolean {
+    private fun loadHtml(tab: Tab, html: String, routeTag: String) {
+        tab.internalRoute = routeTag
+        tab.session.load(GeckoSession.Loader().data(html, "text/html"))
+    }
+
+    private fun checkBlockedAndRender(tab: Tab, url: String): Boolean {
         if (!url.startsWith("http://") && !url.startsWith("https://")) return false
         val host = DomainUtils.extractHostFromUrl(url) ?: return false
         val dark = isDarkUi()
 
         val siteRule = websiteBlocker.findMatchingRuleForHost(host)
         if (siteRule != null) {
-            webView.stopLoading()
+            tab.session.stop()
+            tab.currentUrl = "about:blank"
             val html = BlockedPageHtml.blockedWebsiteHtml(host, siteRule, websiteBlocker, isDark = dark)
-            webView.loadDataWithBaseURL("about:blank", html, "text/html", "utf-8", "about:blank")
+            loadHtml(tab, html, "about:blocked")
             return true
         }
 
         if (adultBlocker.isBlockedHost(host, store.adultProtectionEnabled)) {
-            webView.stopLoading()
+            tab.session.stop()
+            tab.currentUrl = "about:blank"
             val html = BlockedPageHtml.adultBlockedHtml(host, isDark = dark)
-            webView.loadDataWithBaseURL("about:blank", html, "text/html", "utf-8", "about:blank")
+            loadHtml(tab, html, "about:blocked")
             return true
         }
         return false
     }
 
-    // ---- Tabs --------------------------------------------------------------
-
     private fun current(): Tab? = tabs.getOrNull(currentIndex)
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun createTab(url: String?, desktopOverride: Boolean? = null): Tab {
-        val webView = WebView(this)
-        webView.layoutParams = FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+    private fun createTab(
+        url: String?,
+        desktopOverride: Boolean? = null,
+        openSession: Boolean = true
+    ): Tab {
+        val desktop = desktopOverride ?: store.desktopByDefault
+        val settings = PipraGeckoRuntime.buildSessionSettings(
+            isPrivate = isPrivate,
+            desktop = desktop,
+            store = store,
+            desktopUa = DESKTOP_UA
         )
-        hardenSettings(webView.settings)
-
+        val session = GeckoSession(settings)
         val chip = layoutInflater.inflate(R.layout.tab_item, tabBar, false)
         val titleView = chip.findViewById<TextView>(R.id.tabTitle)
         val closeView = chip.findViewById<TextView>(R.id.tabClose)
-        val tab = Tab(webView, chip, titleView, closeView)
-        tab.desktop = desktopOverride ?: store.desktopByDefault
-        applyUserAgent(tab)
+        val tab = Tab(session, chip, titleView, closeView)
+        tab.desktop = desktop
 
-        CookieManager.getInstance().setAcceptThirdPartyCookies(
-            webView, !(isPrivate || store.blockThirdPartyCookies)
-        )
-
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                handleNavigation(view, request.url, request.isForMainFrame, request.hasGesture())
-
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                val reqUrl = request.url?.toString() ?: return null
-                // Enforce Website Blocking and Adult Protection on subresources too.
-                if (!request.isForMainFrame && isBlockedDestination(reqUrl)) {
-                    return adBlocker.emptyResponse()
-                }
-                if (!request.isForMainFrame) {
-                    val blockedByAds = adBlocker.shouldBlockSubresource(
-                        requestUrl = reqUrl,
-                        pageUrl = tab.currentUrl,
-                        mode = store.adBlockMode,
-                        enabled = store.shieldsEnabled,
-                        exceptions = store.adBlockExceptions()
-                    )
-                    if (blockedByAds) {
-                        tab.blocked.incrementAndGet()
-                        store.incrementAdBlocked(1L)
-                        return adBlocker.emptyResponse()
-                    }
-                }
-                return ruleEngine.intercept(request, isPrivateSession = isPrivate)
-            }
-
-            override fun onPageStarted(view: WebView, pageUrl: String?, favicon: Bitmap?) {
-                tab.blocked.set(0)
-                if (pageUrl != null && checkBlockedAndRender(view, pageUrl)) {
-                    tab.currentUrl = "about:blank"
-                    if (view === current()?.webView) {
-                        setUrlBarText("")
-                        updateNavButtons()
-                    }
-                    return
-                }
-                if (pageUrl != null && !pageUrl.startsWith("about:") && !pageUrl.startsWith("pipra://")) {
-                    tab.currentUrl = pageUrl
-                    tab.lastFailedUrl = null
-                }
-                if (view === current()?.webView) {
-                    if (pageUrl != null && !urlBar.hasFocus()) setUrlBarText(displayUrl(pageUrl))
-                    updateNavButtons()
-                }
-            }
-
-            override fun onPageFinished(view: WebView, pageUrl: String?) {
-                if (pageUrl != null && !pageUrl.startsWith("about:")) {
-                    tab.currentUrl = pageUrl
-                }
-                pageUrl?.let { u -> Uri.parse(u).host?.let { upgradedHosts.remove(it) } }
-                if (pageUrl != null && !isPrivate && !pageUrl.startsWith("about:") && !pageUrl.startsWith("pipra://") && !isBlockedDestination(pageUrl)) {
-                    store.addHistory(pageUrl, tab.title)
-                }
-                if (!isPrivate) CookieManager.getInstance().flush()
-                if (tab.desktop) view.evaluateJavascript(DESKTOP_SPOOF_JS, null)
-                if (pageUrl != null && (pageUrl.startsWith("http://") || pageUrl.startsWith("https://"))) {
-                    applyUltimateCosmeticFilter(view, pageUrl)
-                    applyInsertRules(view, pageUrl)
-                }
-                if (view === current()?.webView) updateNavButtons()
-            }
-
-            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                val u = request.url ?: return
-                val host = u.host
-                if (request.isForMainFrame && u.scheme == "https" && host != null && host in upgradedHosts) {
-                    upgradedHosts.remove(host)
-                    AlertDialog.Builder(themedContext())
-                        .setTitle("Site doesn't support HTTPS")
-                        .setMessage("$host couldn't be loaded securely. Continue with an unencrypted HTTP connection?")
-                        .setPositiveButton("Continue") { _, _ ->
-                            httpAllowed.add(host)
-                            val fallbackUrl = u.buildUpon().scheme("http").build().toString()
-                            if (!checkBlockedAndRender(view, fallbackUrl)) {
-                                view.loadUrl(fallbackUrl)
-                            }
-                        }
-                        .setNegativeButton("Go back", null)
-                        .show()
-                    return
-                }
-
-                if (request.isForMainFrame && (u.scheme == "http" || u.scheme == "https")) {
-                    val failedUrl = u.toString()
-                    tab.lastFailedUrl = failedUrl
-                    tab.currentUrl = failedUrl
-                    val offline = isDeviceOffline()
-                    val html = BlockedPageHtml.networkErrorHtml(
-                        failedUrl = failedUrl,
-                        errorDescription = error.description?.toString().orEmpty(),
-                        isOffline = offline,
-                        isDark = isDarkUi()
-                    )
-                    view.loadDataWithBaseURL("about:blank", html, "text/html", "utf-8", null)
-                    if (view === current()?.webView) {
-                        setUrlBarText(failedUrl)
-                    }
-                }
-            }
-
-            override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
-                // Never bypass TLS certificate validation.
-                handler.cancel()
-                toast("Connection refused: invalid TLS certificate")
-            }
-
-            @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.O)
-            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-                val idx = tabs.indexOfFirst { it.webView === view }
-                if (idx >= 0) {
-                    val dead = tabs.removeAt(idx)
-                    val recoverUrl = dead.currentUrl ?: homeUrl
-                    val wasDesktop = dead.desktop
-                    webContainer.removeView(dead.webView)
-                    tabBar.removeView(dead.chip)
-                    try { dead.webView.destroy() } catch (_: Exception) {}
-                    if (currentIndex >= tabs.size) currentIndex = tabs.size - 1
-                    createTab(recoverUrl, desktopOverride = wasDesktop)
-                    toast("Recovered page renderer")
-                } else {
-                    try { view.destroy() } catch (_: Exception) {}
-                }
-                return true
-            }
+        wireSessionDelegates(tab)
+        if (openSession) {
+            session.open(geckoRuntime)
         }
-
-        webView.webChromeClient = object : WebChromeClient() {
-            override fun onProgressChanged(view: WebView, newProgress: Int) {
-                if (view !== current()?.webView) return
-                progress.progress = newProgress
-                progress.visibility = if (newProgress in 1..99) View.VISIBLE else View.GONE
-            }
-
-            override fun onReceivedTitle(view: WebView, title: String?) {
-                val clean = title?.takeIf { it.isNotBlank() && it != "about:blank" } ?: "New Tab"
-                tab.title = clean
-                tab.titleView.text = (if (isPrivate) "[P] " else "") + clean
-            }
-
-            override fun onCreateWindow(
-                view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message
-            ): Boolean {
-                if (store.blockPopups && !isUserGesture) {
-                    toast("Pop-up blocked")
-                    return false
-                }
-                val newTab = createTab(null)
-                val transport = resultMsg.obj as WebView.WebViewTransport
-                transport.webView = newTab.webView
-                resultMsg.sendToTarget()
-                return true
-            }
-
-            override fun onShowCustomView(view: View, callback: CustomViewCallback) = enterFullscreen(view, callback)
-            override fun onHideCustomView() = exitFullscreen()
-
-            override fun onShowFileChooser(
-                view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams
-            ): Boolean {
-                fileCallback?.onReceiveValue(null)
-                fileCallback = callback
-                return try { pickFiles.launch(params.createIntent()); true }
-                catch (_: Exception) { fileCallback = null; toast("No file picker available"); false }
-            }
-
-            override fun onPermissionRequest(request: PermissionRequest) = request.deny()
-            override fun onGeolocationPermissionsShowPrompt(origin: String, callback: GeolocationPermissions.Callback) =
-                callback.invoke(origin, false, false)
-        }
-
-        webView.setDownloadListener { downloadUrl, userAgent, contentDisposition, mimeType, _ ->
-            startDownload(downloadUrl, userAgent, contentDisposition, mimeType)
-        }
-        webView.setOnLongClickListener { showLinkMenu(webView) }
 
         tab.chip.setOnClickListener { switchTo(tabs.indexOf(tab)) }
         tab.closeView.setOnClickListener { closeTab(tabs.indexOf(tab)) }
@@ -720,88 +579,328 @@ open class MainActivity : AppCompatActivity() {
 
         tabs.add(tab)
         tabBar.addView(tab.chip)
-        webContainer.addView(webView)
         switchTo(tabs.size - 1)
 
-        if (url != null) navigate(webView, url)
+        if (url != null) navigate(tab, url)
         return tab
     }
 
+    private fun wireSessionDelegates(tab: Tab) {
+        val session = tab.session
+
+        session.navigationDelegate = object : GeckoSession.NavigationDelegate {
+            override fun onLoadRequest(
+                session: GeckoSession,
+                request: GeckoSession.NavigationDelegate.LoadRequest
+            ): GeckoResult<AllowOrDeny> {
+                val u = Uri.parse(request.uri)
+                val isMainFrame = request.target != GeckoSession.NavigationDelegate.TARGET_WINDOW_NONE
+                val blockedOrHandled = handleNavigation(
+                    tab = tab,
+                    u = u,
+                    mainFrame = isMainFrame,
+                    gesture = request.hasUserGesture
+                )
+                return if (blockedOrHandled) GeckoResult.deny() else GeckoResult.allow()
+            }
+
+            override fun onLocationChange(
+                session: GeckoSession,
+                url: String?,
+                perms: MutableList<GeckoSession.PermissionDelegate.ContentPermission>,
+                hasUserGesture: Boolean
+            ) {
+                if (url == null) return
+                if (url.startsWith("data:")) {
+                    val internal = tab.internalRoute
+                    if (internal == Store.DEFAULT_HOMEPAGE || internal == PRIVATE_HOME || internal == "about:blocked") {
+                        tab.currentUrl = if (internal == "about:blocked") "about:blank" else internal
+                        if (tab === current()) setUrlBarText("")
+                    } else if (internal == "about:error" && tab.lastFailedUrl != null) {
+                        tab.currentUrl = tab.lastFailedUrl
+                        if (tab === current()) setUrlBarText(tab.lastFailedUrl.orEmpty())
+                    }
+                    return
+                }
+                tab.internalRoute = null
+                if (checkBlockedAndRender(tab, url)) {
+                    if (tab === current()) {
+                        setUrlBarText("")
+                        updateNavButtons()
+                    }
+                    return
+                }
+                if (!url.startsWith("about:") && !url.startsWith("pipra://")) {
+                    tab.currentUrl = url
+                    tab.lastFailedUrl = null
+                }
+                if (tab === current()) {
+                    if (!urlBar.hasFocus()) setUrlBarText(displayUrl(url))
+                    updateNavButtons()
+                }
+            }
+
+            override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
+                tab.canGoBack = canGoBack
+                if (tab === current()) updateNavButtons()
+            }
+
+            override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {
+                tab.canGoForward = canGoForward
+                if (tab === current()) updateNavButtons()
+            }
+
+            override fun onNewSession(session: GeckoSession, uri: String): GeckoResult<GeckoSession> {
+                if (store.blockPopups) {
+                    toast("Pop-up blocked")
+                    return GeckoResult.fromValue(null)
+                }
+                val newTab = createTab(null, openSession = false)
+                return GeckoResult.fromValue(newTab.session)
+            }
+
+            override fun onLoadError(
+                session: GeckoSession,
+                uri: String?,
+                error: WebRequestError
+            ): GeckoResult<String>? {
+                val failed = uri ?: return null
+                val u = Uri.parse(failed)
+                val host = u.host
+                if (u.scheme == "https" && host != null && host in upgradedHosts) {
+                    upgradedHosts.remove(host)
+                    runOnUiThread {
+                        AlertDialog.Builder(themedContext())
+                            .setTitle("Site doesn't support HTTPS")
+                            .setMessage("$host couldn't be loaded securely. Continue with an unencrypted HTTP connection?")
+                            .setPositiveButton("Continue") { _, _ ->
+                                httpAllowed.add(host)
+                                val fallbackUrl = u.buildUpon().scheme("http").build().toString()
+                                if (!checkBlockedAndRender(tab, fallbackUrl)) {
+                                    tab.internalRoute = null
+                                    tab.session.loadUri(fallbackUrl)
+                                }
+                            }
+                            .setNegativeButton("Go back", null)
+                            .show()
+                    }
+                    return GeckoResult.fromValue("about:blank")
+                }
+
+                if (u.scheme == "http" || u.scheme == "https") {
+                    tab.lastFailedUrl = failed
+                    tab.currentUrl = failed
+                    tab.internalRoute = "about:error"
+                    val html = BlockedPageHtml.networkErrorHtml(
+                        failedUrl = failed,
+                        errorDescription = "Error code ${error.code}",
+                        isOffline = isDeviceOffline(),
+                        isDark = isDarkUi()
+                    )
+                    if (tab === current()) {
+                        runOnUiThread { setUrlBarText(failed) }
+                    }
+                    return GeckoResult.fromValue("data:text/html;charset=utf-8," + Uri.encode(html))
+                }
+                return null
+            }
+        }
+
+        session.progressDelegate = object : GeckoSession.ProgressDelegate {
+            override fun onPageStart(session: GeckoSession, url: String) {
+                tab.blocked.set(0)
+                if (!url.startsWith("data:") && !url.startsWith("about:") && !url.startsWith("pipra://")) {
+                    if (checkBlockedAndRender(tab, url)) {
+                        if (tab === current()) {
+                            setUrlBarText("")
+                            updateNavButtons()
+                        }
+                        return
+                    }
+                    tab.currentUrl = url
+                    tab.lastFailedUrl = null
+                    if (tab === current() && !urlBar.hasFocus()) {
+                        setUrlBarText(displayUrl(url))
+                    }
+                }
+                if (tab === current()) updateNavButtons()
+            }
+
+            override fun onPageStop(session: GeckoSession, success: Boolean) {
+                val pageUrl = tab.currentUrl
+                if (success && pageUrl != null && !pageUrl.startsWith("about:") && !pageUrl.startsWith("data:")) {
+                    Uri.parse(pageUrl).host?.let { upgradedHosts.remove(it) }
+                    if (!isPrivate && !pageUrl.startsWith("pipra://") && !isBlockedDestination(pageUrl)) {
+                        store.addHistory(pageUrl, tab.title)
+                    }
+                }
+                if (tab === current()) {
+                    progress.visibility = View.GONE
+                    updateNavButtons()
+                }
+            }
+
+            override fun onProgressChange(session: GeckoSession, progressVal: Int) {
+                if (tab !== current()) return
+                progress.progress = progressVal
+                progress.visibility = if (progressVal in 1..99) View.VISIBLE else View.GONE
+            }
+        }
+
+        session.contentDelegate = object : GeckoSession.ContentDelegate {
+            override fun onTitleChange(session: GeckoSession, title: String?) {
+                val clean = title?.takeIf {
+                    it.isNotBlank() && it != "about:blank" && !it.startsWith("data:text/html")
+                } ?: "New Tab"
+                tab.title = clean
+                tab.titleView.text = (if (isPrivate) "[P] " else "") + clean
+            }
+
+            override fun onFullScreen(session: GeckoSession, fullScreen: Boolean) {
+                if (fullScreen) enterFullscreenUi() else exitFullscreenUi()
+            }
+
+            override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
+                val disp = response.headers["content-disposition"] ?: response.headers["Content-Disposition"]
+                val mime = response.headers["content-type"] ?: response.headers["Content-Type"]
+                runOnUiThread {
+                    startDownload(response.uri, null, disp, mime)
+                }
+            }
+
+            override fun onContextMenu(
+                session: GeckoSession,
+                screenX: Int,
+                screenY: Int,
+                element: GeckoSession.ContentDelegate.ContextElement
+            ) {
+                val linkUrl = element.linkUri?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+                val imgUrl = element.srcUri?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+                if (linkUrl != null || imgUrl != null) {
+                    runOnUiThread {
+                        presentLinkImageDialog(
+                            tab = tab,
+                            linkUrl = linkUrl,
+                            imageUrl = imgUrl,
+                            isLink = linkUrl != null,
+                            isImage = imgUrl != null
+                        )
+                    }
+                }
+            }
+
+            override fun onCrash(session: GeckoSession) = recoverCrashedTab(tab)
+            override fun onKill(session: GeckoSession) = recoverCrashedTab(tab)
+        }
+
+        session.permissionDelegate = object : GeckoSession.PermissionDelegate {
+            override fun onAndroidPermissionsRequest(
+                session: GeckoSession,
+                permissions: Array<out String>?,
+                callback: GeckoSession.PermissionDelegate.Callback
+            ) {
+                callback.reject()
+            }
+
+            override fun onContentPermissionRequest(
+                session: GeckoSession,
+                perm: GeckoSession.PermissionDelegate.ContentPermission
+            ): GeckoResult<Int> =
+                GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
+
+            override fun onMediaPermissionRequest(
+                session: GeckoSession,
+                uri: String,
+                video: Array<out GeckoSession.PermissionDelegate.MediaSource>?,
+                audio: Array<out GeckoSession.PermissionDelegate.MediaSource>?,
+                callback: GeckoSession.PermissionDelegate.MediaCallback
+            ) {
+                callback.reject()
+            }
+        }
+
+        session.historyDelegate = object : GeckoSession.HistoryDelegate {
+            override fun onHistoryStateChange(
+                session: GeckoSession,
+                historyList: GeckoSession.HistoryDelegate.HistoryList
+            ) {
+                tab.historyCurrentIndex = historyList.currentIndex
+                tab.historyEntries.clear()
+                for (item in historyList) {
+                    val u = item.uri
+                    val t = item.title.orEmpty().ifBlank { u }
+                    if (!u.startsWith("data:")) tab.historyEntries.add(u to t)
+                }
+            }
+        }
+
+        session.promptDelegate = object : GeckoSession.PromptDelegate {
+            override fun onFilePrompt(
+                session: GeckoSession,
+                prompt: GeckoSession.PromptDelegate.FilePrompt
+            ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
+                val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                pendingFilePrompt = prompt
+                pendingFilePromptResult = result
+                val mime = prompt.mimeTypes?.firstOrNull()?.takeIf { it.isNotBlank() } ?: "*/*"
+                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = mime
+                    if (prompt.type == GeckoSession.PromptDelegate.FilePrompt.Type.MULTIPLE) {
+                        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    }
+                }
+                return try {
+                    pickFiles.launch(Intent.createChooser(intent, "Choose file"))
+                    result
+                } catch (_: Exception) {
+                    pendingFilePrompt = null
+                    pendingFilePromptResult = null
+                    result.complete(prompt.dismiss())
+                    result
+                }
+            }
+        }
+    }
+
+    private fun recoverCrashedTab(tab: Tab) {
+        runOnUiThread {
+            val idx = tabs.indexOf(tab)
+            if (idx < 0) return@runOnUiThread
+            val recoverUrl = tab.currentUrl ?: homeUrl
+            val wasDesktop = tab.desktop
+            if (tab === current()) {
+                try { geckoView.releaseSession() } catch (_: Exception) {}
+            }
+            tabs.removeAt(idx)
+            tabBar.removeView(tab.chip)
+            try { tab.session.close() } catch (_: Exception) {}
+            if (currentIndex >= tabs.size) currentIndex = tabs.size - 1
+            createTab(recoverUrl, desktopOverride = wasDesktop)
+            toast("Recovered page renderer")
+        }
+    }
+
     private fun applySettingsToAllTabs() {
+        PipraGeckoRuntime.applyStoreSettings(store)
         for (t in tabs) {
-            hardenSettings(t.webView.settings)
+            t.session.settings.useTrackingProtection = store.shieldsEnabled
             applyUserAgent(t)
-            CookieManager.getInstance().setAcceptThirdPartyCookies(
-                t.webView, !(isPrivate || store.blockThirdPartyCookies)
-            )
         }
     }
 
-    private fun applyUltimateCosmeticFilter(view: WebView, pageUrl: String) {
-        if (!store.shieldsEnabled || store.adBlockMode != AdBlockMode.ULTIMATE) return
-        val host = DomainUtils.extractHostFromUrl(pageUrl) ?: return
-        if (store.isAdBlockException(host)) return
-        val css = AdBlockerEngine.ULTIMATE_COSMETIC_CSS.replace("\\", "\\\\").replace("`", "\\`")
-        val js = "(function(){if(document.getElementById('pipra-cosmetic'))return;var s=document.createElement('style');s.id='pipra-cosmetic';s.textContent=`$css`;(document.head||document.documentElement).appendChild(s);})();"
-        try { view.evaluateJavascript(js, null) } catch (_: Exception) {}
-    }
-
-    private fun applyInsertRules(view: WebView, url: String) {
-        if (!dev.devToolsEnabled) return
-        for (r in dev.insertRulesFor(url)) {
-            if (r.target.isBlank()) continue
-            val js = if (r.isCss) {
-                val css = r.target.replace("\\", "\\\\").replace("`", "\\`")
-                "(function(){var s=document.createElement('style');s.textContent=`$css`;document.head.appendChild(s);})();"
-            } else r.target
-            try { view.evaluateJavascript(js, null) } catch (_: Exception) {}
-        }
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun hardenSettings(s: WebSettings) {
-        s.javaScriptEnabled = store.javaScriptEnabled
-        s.domStorageEnabled = true
-        s.databaseEnabled = true
-        s.useWideViewPort = true
-        s.loadWithOverviewMode = true
-        s.builtInZoomControls = true
-        s.displayZoomControls = false
-        s.setSupportZoom(true)
-        s.setSupportMultipleWindows(true)
-        s.javaScriptCanOpenWindowsAutomatically = !store.blockPopups
-        s.mediaPlaybackRequiresUserGesture = true
-        s.allowFileAccess = false
-        s.allowContentAccess = false
-        @Suppress("DEPRECATION")
-        run {
-            s.allowFileAccessFromFileURLs = false
-            s.allowUniversalAccessFromFileURLs = false
-            s.saveFormData = !isPrivate
-        }
-        s.mixedContentMode =
-            if (store.httpsOnly) WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            else WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            s.safeBrowsingEnabled = true
-        }
-        s.cacheMode = WebSettings.LOAD_DEFAULT
-        s.blockNetworkImage = store.blockImages
-        s.loadsImagesAutomatically = !store.blockImages
-    }
-
-    private fun handleNavigation(view: WebView, u: Uri, mainFrame: Boolean, gesture: Boolean): Boolean {
+    private fun handleNavigation(tab: Tab, u: Uri, mainFrame: Boolean, gesture: Boolean): Boolean {
         val rawStr = u.toString()
 
         if (u.scheme.equals("pipra", ignoreCase = true)) {
             if (!mainFrame) return true
             when (u.host?.lowercase()) {
-                "home" -> loadInto(view, Store.DEFAULT_HOMEPAGE)
+                "home" -> loadInto(tab, Store.DEFAULT_HOMEPAGE)
                 "search" -> {
                     val q = u.getQueryParameter("q").orEmpty()
                     if (q.isNotBlank()) {
                         val resolved = DomainUtils.resolveOmniboxInput(q, store.searchTemplate(), homeUrl)
-                        navigate(view, resolved)
+                        navigate(tab, resolved)
                     }
                 }
                 "engine" -> {
@@ -809,10 +908,10 @@ open class MainActivity : AppCompatActivity() {
                     if (eng.isNotBlank()) {
                         store.searchEngine = eng
                         toast("Search engine: ${store.searchEngine}")
-                        loadInto(view, Store.DEFAULT_HOMEPAGE)
+                        loadInto(tab, Store.DEFAULT_HOMEPAGE)
                     }
                 }
-                "custom-engine" -> promptCustomSearchEngine(view)
+                "custom-engine" -> promptCustomSearchEngine(tab)
                 "bookmarks" -> if (isPrivate) toast("Bookmarks are disabled in Private mode") else showBookmarks()
                 "history" -> if (isPrivate) toast("History is disabled in Private mode") else showHistory()
                 "downloads" -> openDownloads()
@@ -822,28 +921,49 @@ open class MainActivity : AppCompatActivity() {
                 }
                 "game" -> startActivity(Intent(this, OfflineGameActivity::class.java))
                 "retry" -> {
-                    val tab = tabs.firstOrNull { it.webView === view }
-                    val target = tab?.lastFailedUrl
-                    if (!target.isNullOrBlank()) navigate(view, target)
-                    else loadInto(view, homeUrl)
+                    val target = tab.lastFailedUrl
+                    if (!target.isNullOrBlank()) navigate(tab, target)
+                    else loadInto(tab, homeUrl)
                 }
             }
             return true
         }
 
-        // 1. Always enforce Website Blocking & Adult Protection first on main-frame links & redirects.
-        if (mainFrame && checkBlockedAndRender(view, rawStr)) {
+        if (mainFrame && isBlockedDestination(rawStr)) {
+            checkBlockedAndRender(tab, rawStr)
             return true
         }
 
-        // 2. Developer Tool main-frame rules (must still pass blocking gate on target!).
+        if (!mainFrame) {
+            val blockedByAds = adBlocker.shouldBlockSubresource(
+                requestUrl = rawStr,
+                pageUrl = tab.currentUrl,
+                mode = store.adBlockMode,
+                enabled = store.shieldsEnabled,
+                exceptions = store.adBlockExceptions()
+            )
+            if (blockedByAds || isBlockedDestination(rawStr)) {
+                if (blockedByAds) {
+                    tab.blocked.incrementAndGet()
+                    store.incrementAdBlocked(1L)
+                }
+                return true
+            }
+        }
+
         if (mainFrame && dev.devToolsEnabled) {
             val matching = dev.requestRules().filter { it.enabled && UrlMatch.matches(it.urlPattern, rawStr) }
+            if (matching.any { it.action == RequestRule.ACTION_BLOCK }) {
+                return true
+            }
             matching.firstOrNull {
                 it.action == RequestRule.ACTION_REDIRECT && it.target.isNotBlank() && it.target != rawStr
             }?.let { rule ->
                 if (rule.target.startsWith("http://") || rule.target.startsWith("https://")) {
-                    if (!checkBlockedAndRender(view, rule.target)) view.loadUrl(rule.target)
+                    if (!checkBlockedAndRender(tab, rule.target)) {
+                        tab.internalRoute = null
+                        tab.session.loadUri(rule.target)
+                    }
                 }
                 return true
             }
@@ -851,7 +971,10 @@ open class MainActivity : AppCompatActivity() {
             if (urlEdits.isNotEmpty()) {
                 val rewritten = ruleEngine.rewriteUrl(rawStr, urlEdits)
                 if (rewritten != rawStr && (rewritten.startsWith("http://") || rewritten.startsWith("https://"))) {
-                    if (!checkBlockedAndRender(view, rewritten)) view.loadUrl(rewritten)
+                    if (!checkBlockedAndRender(tab, rewritten)) {
+                        tab.internalRoute = null
+                        tab.session.loadUri(rewritten)
+                    }
                     return true
                 }
             }
@@ -862,7 +985,8 @@ open class MainActivity : AppCompatActivity() {
                 if (mainFrame && (store.stripTrackingParams || (store.shieldsEnabled && store.adBlockMode == AdBlockMode.ULTIMATE))) {
                     val stripped = adBlocker.stripTrackingParams(rawStr)
                     if (stripped != rawStr) {
-                        view.loadUrl(stripped)
+                        tab.internalRoute = null
+                        tab.session.loadUri(stripped)
                         return true
                     }
                 }
@@ -874,19 +998,23 @@ open class MainActivity : AppCompatActivity() {
                     upgradedHosts.add(host)
                     val upgraded = u.buildUpon().scheme("https").build().toString()
                     val finalUrl = if (store.stripTrackingParams) adBlocker.stripTrackingParams(upgraded) else upgraded
-                    if (!checkBlockedAndRender(view, finalUrl)) view.loadUrl(finalUrl)
+                    if (!checkBlockedAndRender(tab, finalUrl)) {
+                        tab.internalRoute = null
+                        tab.session.loadUri(finalUrl)
+                    }
                     return true
                 }
                 return false
             }
             "about" -> return rawStr != "about:blank"
-            "file", "content", "javascript", "data", "blob", "vbscript" -> return true
-            "intent" -> { openIntentUri(view, u, gesture); return true }
+            "data" -> return tab.internalRoute == null
+            "file", "content", "javascript", "blob", "vbscript" -> return true
+            "intent" -> { openIntentUri(tab, u, gesture); return true }
             else -> { openExternal(Intent(Intent.ACTION_VIEW, u), gesture); return true }
         }
     }
 
-    private fun promptCustomSearchEngine(view: WebView) {
+    private fun promptCustomSearchEngine(tab: Tab) {
         val input = EditText(themedContext()).apply {
             hint = "https://search.example.com/?q=%s"
             setText(store.customSearchUrl)
@@ -903,7 +1031,7 @@ open class MainActivity : AppCompatActivity() {
                 } else {
                     store.customSearchUrl = valid
                     store.searchEngine = Store.CUSTOM_SEARCH_ENGINE
-                    loadInto(view, Store.DEFAULT_HOMEPAGE)
+                    loadInto(tab, Store.DEFAULT_HOMEPAGE)
                     toast("Custom search engine active")
                 }
             }
@@ -911,16 +1039,18 @@ open class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun openIntentUri(view: WebView, u: Uri, gesture: Boolean) {
+    private fun openIntentUri(tab: Tab, u: Uri, gesture: Boolean) {
         val intent = try { Intent.parseUri(u.toString(), Intent.URI_INTENT_SCHEME) } catch (_: Exception) { return }
         val fallback = intent.getStringExtra("browser_fallback_url")
         intent.addCategory(Intent.CATEGORY_BROWSABLE)
         intent.component = null
         intent.selector = null
-        val canHandle = intent.resolveActivity(packageManager) != null
-        if (canHandle) openExternal(intent, gesture)
+        if (intent.resolveActivity(packageManager) != null) openExternal(intent, gesture)
         else if (fallback != null && (fallback.startsWith("https://") || fallback.startsWith("http://"))) {
-            if (!checkBlockedAndRender(view, fallback)) view.loadUrl(fallback)
+            if (!checkBlockedAndRender(tab, fallback)) {
+                tab.internalRoute = null
+                tab.session.loadUri(fallback)
+            }
         }
     }
 
@@ -939,77 +1069,81 @@ open class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun navigate(webView: WebView, rawUrl: String) {
+    private fun navigate(tab: Tab, rawUrl: String) {
         val url = if (store.stripTrackingParams) adBlocker.stripTrackingParams(rawUrl) else rawUrl
         if (url == Store.DEFAULT_HOMEPAGE || (url == PRIVATE_HOME && isPrivate)) {
-            loadInto(webView, url)
+            loadInto(tab, url)
             return
         }
-        if (checkBlockedAndRender(webView, url)) return
+        if (checkBlockedAndRender(tab, url)) return
 
         val u = Uri.parse(url)
         val host = u.host
         if (u.scheme == "http" && store.httpsOnly && host != null && host !in httpAllowed) {
             upgradedHosts.add(host)
             val httpsUrl = u.buildUpon().scheme("https").build().toString()
-            if (!checkBlockedAndRender(webView, httpsUrl)) loadInto(webView, httpsUrl)
+            if (!checkBlockedAndRender(tab, httpsUrl)) loadInto(tab, httpsUrl)
         } else {
-            loadInto(webView, url)
+            loadInto(tab, url)
         }
     }
 
-    private fun loadInto(webView: WebView, url: String) {
-        val tab = tabs.firstOrNull { it.webView === webView }
+    private fun loadInto(tab: Tab, url: String) {
         when {
             url == PRIVATE_HOME && isPrivate -> {
-                tab?.currentUrl = PRIVATE_HOME
-                webView.loadDataWithBaseURL(null, BlockedPageHtml.privateLandingHtml(), "text/html", "utf-8", PRIVATE_HOME)
+                tab.currentUrl = PRIVATE_HOME
+                loadHtml(tab, BlockedPageHtml.privateLandingHtml(), PRIVATE_HOME)
+                if (tab === current()) setUrlBarText("")
             }
             url == Store.DEFAULT_HOMEPAGE -> {
-                tab?.currentUrl = Store.DEFAULT_HOMEPAGE
+                tab.currentUrl = Store.DEFAULT_HOMEPAGE
                 val html = BlockedPageHtml.pipraHomeHtml(
                     activeEngine = store.searchEngine,
                     availableEngines = store.availableSearchEngines(),
                     bookmarks = if (isPrivate) emptyList() else store.bookmarks(),
                     isDark = isDarkUi()
                 )
-                webView.loadDataWithBaseURL("about:blank", html, "text/html", "utf-8", Store.DEFAULT_HOMEPAGE)
-                if (webView === current()?.webView) setUrlBarText("")
+                loadHtml(tab, html, Store.DEFAULT_HOMEPAGE)
+                if (tab === current()) setUrlBarText("")
             }
             else -> {
-                if (!checkBlockedAndRender(webView, url)) webView.loadUrl(url)
+                if (!checkBlockedAndRender(tab, url)) {
+                    tab.internalRoute = null
+                    tab.session.loadUri(url)
+                }
             }
         }
     }
 
     private fun displayUrl(url: String): String =
-        if (url == PRIVATE_HOME || url == Store.DEFAULT_HOMEPAGE || url == "about:blank") "" else url
+        if (url == PRIVATE_HOME || url == Store.DEFAULT_HOMEPAGE || url == "about:blank" || url.startsWith("data:")) ""
+        else url
 
     private fun switchTo(index: Int) {
         if (index < 0 || index >= tabs.size) return
         currentIndex = index
-        for (i in tabs.indices) {
-            val visible = i == index
-            tabs[i].webView.visibility = if (visible) View.VISIBLE else View.GONE
-        }
-        refreshTabChipsAppearance()
         val tab = tabs[index]
-        setUrlBarText(displayUrl(tab.currentUrl ?: tab.webView.url ?: ""))
+        geckoView.setSession(tab.session)
+        refreshTabChipsAppearance()
+        setUrlBarText(displayUrl(tab.currentUrl ?: ""))
         updateNavButtons()
         if (findBar.visibility == View.VISIBLE) closeFind()
     }
 
     private fun closeTab(index: Int) {
         if (index < 0 || index >= tabs.size) return
+        val wasCurrent = index == currentIndex
         val tab = tabs.removeAt(index)
-        val url = tab.currentUrl ?: tab.webView.url ?: homeUrl
+        val url = tab.currentUrl ?: homeUrl
         if (url.startsWith("http://") || url.startsWith("https://")) {
             closedTabs.addFirst(ClosedTabRecord(url, tab.title, tab.desktop))
             while (closedTabs.size > MAX_CLOSED_TABS) closedTabs.removeLast()
         }
-        webContainer.removeView(tab.webView)
+        if (wasCurrent) {
+            try { geckoView.releaseSession() } catch (_: Exception) {}
+        }
         tabBar.removeView(tab.chip)
-        tab.webView.destroy()
+        try { tab.session.close() } catch (_: Exception) {}
         if (tabs.isEmpty()) createTab(homeUrl)
         else switchTo(index.coerceAtMost(tabs.size - 1))
     }
@@ -1024,9 +1158,9 @@ open class MainActivity : AppCompatActivity() {
     }
 
     private fun loadUserInput(text: String) {
-        val wv = current()?.webView ?: return
+        val tab = current() ?: return
         val resolved = DomainUtils.resolveOmniboxInput(text, store.searchTemplate(), homeUrl)
-        navigate(wv, resolved)
+        navigate(tab, resolved)
         urlBar.clearFocus()
         hideKeyboard(urlBar)
     }
@@ -1040,9 +1174,9 @@ open class MainActivity : AppCompatActivity() {
     }
 
     private fun updateNavButtons() {
-        val wv = current()?.webView
-        val back = wv?.canGoBack() == true
-        val fwd = wv?.canGoForward() == true
+        val tab = current()
+        val back = tab?.canGoBack == true
+        val fwd = tab?.canGoForward == true
         btnBack.isEnabled = back; btnBack.alpha = if (back) 1f else 0.35f
         btnForward.isEnabled = fwd; btnForward.alpha = if (fwd) 1f else 0.35f
     }
@@ -1067,48 +1201,41 @@ open class MainActivity : AppCompatActivity() {
     }
 
     private fun showNavHistory() {
-        val wv = current()?.webView ?: return
-        val list = wv.copyBackForwardList()
-        if (list.size == 0) { toast("Nothing to go back to yet"); return }
+        val tab = current() ?: return
+        val entries = tab.historyEntries
+        if (entries.isEmpty()) { toast("Nothing to go back to yet"); return }
         val items = ArrayList<Pair<String, Int>>()
-        for (i in list.size - 1 downTo 0) {
-            val it = list.getItemAtIndex(i) ?: continue
+        for (i in entries.size - 1 downTo 0) {
+            val (u, t) = entries[i]
             val marker = when {
-                i == list.currentIndex -> "• "
-                i < list.currentIndex -> "← "
+                i == tab.historyCurrentIndex -> "• "
+                i < tab.historyCurrentIndex -> "← "
                 else -> "→ "
             }
-            val title = it.title?.takeIf { t -> t.isNotBlank() } ?: it.url
-            items.add("$marker$title" to i)
+            items.add("$marker${t.ifBlank { u }}" to i)
         }
         AlertDialog.Builder(themedContext())
             .setTitle("Pages in this tab")
             .setItems(items.map { it.first }.toTypedArray()) { _, which ->
-                val target = items[which].second
-                val steps = target - list.currentIndex
-                if (steps != 0 && wv.canGoBackOrForward(steps)) wv.goBackOrForward(steps)
+                val targetIdx = items[which].second
+                if (targetIdx != tab.historyCurrentIndex) {
+                    tab.session.gotoHistoryIndex(targetIdx)
+                }
             }
             .setNegativeButton("Close", null)
             .show()
     }
 
     private fun applyUserAgent(tab: Tab) {
-        val s = tab.webView.settings
-        s.userAgentString = if (tab.desktop) DESKTOP_UA else WebSettings.getDefaultUserAgent(this)
-        s.useWideViewPort = tab.desktop
-        s.loadWithOverviewMode = tab.desktop
-        tab.webView.setInitialScale(if (tab.desktop) 1 else 0)
-        installDesktopSpoof(tab)
-    }
-
-    private fun installDesktopSpoof(tab: Tab) {
-        if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) return
-        tab.spoofScript?.let { try { it.remove() } catch (_: Exception) {} }
-        tab.spoofScript = null
+        val s = tab.session.settings
         if (tab.desktop) {
-            tab.spoofScript = try {
-                androidx.webkit.WebViewCompat.addDocumentStartJavaScript(tab.webView, DESKTOP_SPOOF_JS, setOf("*"))
-            } catch (_: Exception) { null }
+            s.userAgentOverride = DESKTOP_UA
+            s.userAgentMode = GeckoSessionSettings.USER_AGENT_MODE_DESKTOP
+            s.viewportMode = GeckoSessionSettings.VIEWPORT_MODE_DESKTOP
+        } else {
+            s.userAgentOverride = null
+            s.userAgentMode = GeckoSessionSettings.USER_AGENT_MODE_MOBILE
+            s.viewportMode = GeckoSessionSettings.VIEWPORT_MODE_MOBILE
         }
     }
 
@@ -1116,85 +1243,45 @@ open class MainActivity : AppCompatActivity() {
         val tab = current() ?: return
         tab.desktop = !tab.desktop
         applyUserAgent(tab)
-        tab.webView.reload()
+        tab.session.reload()
         toast(if (tab.desktop) "Desktop site on" else "Desktop site off")
     }
 
-    private fun enterFullscreen(view: View, callback: WebChromeClient.CustomViewCallback) {
-        if (customView != null) { callback.onCustomViewHidden(); return }
-        customView = view
-        customViewCallback = callback
-        (window.decorView as FrameLayout).addView(
-            view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        )
+    private fun enterFullscreenUi() {
+        if (isFullscreen) return
+        isFullscreen = true
         val c = WindowCompat.getInsetsController(window, window.decorView)
         c.hide(WindowInsetsCompat.Type.systemBars())
         c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
-    private fun exitFullscreen() {
-        val v = customView ?: return
-        (window.decorView as FrameLayout).removeView(v)
-        customView = null
-        customViewCallback?.onCustomViewHidden()
-        customViewCallback = null
+    private fun exitFullscreenUi() {
+        if (!isFullscreen) return
+        isFullscreen = false
         WindowCompat.getInsetsController(window, window.decorView).show(WindowInsetsCompat.Type.systemBars())
     }
 
-    private fun showLinkMenu(webView: WebView): Boolean {
-        val hit = webView.hitTestResult
-        val isLink = hit.type == WebView.HitTestResult.SRC_ANCHOR_TYPE ||
-            hit.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
-        val isImage = hit.type == WebView.HitTestResult.IMAGE_TYPE ||
-            hit.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
-        if (!isLink && !isImage) return false
-
-        if (hit.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE) {
-            val handler = Handler(Looper.getMainLooper()) { msg ->
-                val data = msg.data
-                val hrefUrl = data.getString("url")?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
-                val imgUrl = data.getString("src")?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
-                    ?: hit.extra?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
-                presentLinkImageDialog(webView, hrefUrl, imgUrl, isLink = hrefUrl != null, isImage = imgUrl != null)
-                true
-            }
-            val msg = handler.obtainMessage()
-            webView.requestFocusNodeHref(msg)
-            return true
-        }
-
-        val target = hit.extra ?: return false
-        if (!(target.startsWith("http://") || target.startsWith("https://"))) return false
-        presentLinkImageDialog(
-            webView = webView,
-            linkUrl = if (isLink) target else null,
-            imageUrl = if (isImage) target else null,
-            isLink = isLink,
-            isImage = isImage
-        )
-        return true
-    }
-
     private fun presentLinkImageDialog(
-        webView: WebView,
+        tab: Tab,
         linkUrl: String?,
         imageUrl: String?,
         isLink: Boolean,
         isImage: Boolean
     ) {
         val primaryUrl = linkUrl ?: imageUrl ?: return
+        val ua = if (tab.desktop) DESKTOP_UA else null
         val options = mutableListOf<Pair<String, () -> Unit>>()
         if (isLink && linkUrl != null) {
-            options += "Open link" to { navigate(webView, linkUrl) }
+            options += "Open link" to { navigate(tab, linkUrl) }
             options += "Open in new tab" to { createTab(linkUrl); Unit }
             if (!isPrivate) options += "Open in private window" to { openPrivateWindow(linkUrl) }
-            options += "Download link" to { startDownload(linkUrl, webView.settings.userAgentString, null, null) }
+            options += "Download link" to { startDownload(linkUrl, ua, null, null) }
             options += "Copy link address" to { copyText(linkUrl, "Link copied") }
             options += "Share link" to { shareText(linkUrl) }
         }
         if (isImage && imageUrl != null) {
             options += "Open image in new tab" to { createTab(imageUrl); Unit }
-            options += "Download image" to { startDownload(imageUrl, webView.settings.userAgentString, null, "image/*") }
+            options += "Download image" to { startDownload(imageUrl, ua, null, "image/*") }
             if (!isLink) {
                 options += "Copy image URL" to { copyText(imageUrl, "Image URL copied") }
                 options += "Share image URL" to { shareText(imageUrl) }
@@ -1230,8 +1317,7 @@ open class MainActivity : AppCompatActivity() {
         val scroll = ScrollView(this).apply { addView(col) }
 
         val tab = current()
-        val wv = tab?.webView
-        val url = wv?.url?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+        val url = tab?.currentUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
         val host = url?.let { DomainUtils.extractHostFromUrl(it) }
         val bookmarked = url != null && store.isBookmarked(url)
 
@@ -1253,8 +1339,8 @@ open class MainActivity : AppCompatActivity() {
                 setOnClickListener { sheet.dismiss(); action() }
             })
         }
-        quickIcon(R.drawable.ic_back, "Back", wv?.canGoBack() == true) { wv?.goBack() }
-        quickIcon(R.drawable.ic_forward, "Forward", wv?.canGoForward() == true) { wv?.goForward() }
+        quickIcon(R.drawable.ic_back, "Back", tab?.canGoBack == true) { tab?.session?.goBack() }
+        quickIcon(R.drawable.ic_forward, "Forward", tab?.canGoForward == true) { tab?.session?.goForward() }
         if (!isPrivate) {
             quickIcon(
                 if (bookmarked) R.drawable.ic_star else R.drawable.ic_star_border,
@@ -1263,8 +1349,8 @@ open class MainActivity : AppCompatActivity() {
                 tintColor = if (bookmarked) accentColor else textColor
             ) { toggleBookmarkCurrent() }
         }
-        quickIcon(R.drawable.ic_refresh, "Reload") { wv?.reload() }
-        quickIcon(R.drawable.ic_home, "Home") { wv?.let { loadInto(it, homeUrl) } }
+        quickIcon(R.drawable.ic_refresh, "Reload") { tab?.session?.reload() }
+        quickIcon(R.drawable.ic_home, "Home") { tab?.let { loadInto(it, homeUrl) } }
         col.addView(quick)
         col.addView(View(this).apply {
             setBackgroundColor(dividerColor)
@@ -1278,7 +1364,7 @@ open class MainActivity : AppCompatActivity() {
             val isException = store.isAdBlockException(host)
             item(if (isException) "Resume Ad Blocker on $host" else "Pause Ad Blocker on $host") {
                 if (isException) store.removeAdBlockException(host) else store.addAdBlockException(host)
-                wv.reload()
+                tab?.session?.reload()
                 toast(if (isException) "Ad Blocker resumed on $host" else "Ad Blocker paused on $host")
             }
         }
@@ -1342,34 +1428,58 @@ open class MainActivity : AppCompatActivity() {
             return
         }
         store.shieldsEnabled = !store.shieldsEnabled
-        current()?.webView?.reload()
+        applySettingsToAllTabs()
+        current()?.session?.reload()
         toast(if (store.shieldsEnabled) "Ad Blocker on (${store.adBlockMode.label})" else "Ad Blocker off")
     }
 
     private fun saveCurrentPageOffline() {
         val tab = current() ?: return
-        val wv = tab.webView
-        val url = wv.url?.takeIf { it.startsWith("http://") || it.startsWith("https://") } ?: run {
+        val url = tab.currentUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") } ?: run {
             toast("Open a webpage before saving offline")
             return
         }
+        if (isBlockedDestination(url)) {
+            toast("Cannot save blocked page")
+            return
+        }
+        val title = tab.title
         val savedDir = File(filesDir, "saved_pages").apply { mkdirs() }
-        // Remove previous offline snapshot for same URL if refreshing
         store.bookmarks().firstOrNull { it.url == url }?.offlineArchivePath?.takeIf { it.isNotBlank() }?.let { prev ->
             try { File(prev).delete() } catch (_: Exception) {}
         }
-        val target = File(savedDir, "pipra_${url.hashCode().absoluteValue}_${System.currentTimeMillis()}.mht")
-        wv.saveWebArchive(target.absolutePath, false) { savedPath ->
-            if (!savedPath.isNullOrBlank() && File(savedPath).exists()) {
-                store.saveOfflineBookmark(url, tab.title, savedPath)
-                if (tabs.firstOrNull()?.currentUrl == Store.DEFAULT_HOMEPAGE) {
-                    loadInto(tabs.first().webView, Store.DEFAULT_HOMEPAGE)
+        val target = File(savedDir, "pipra_${url.hashCode().absoluteValue}_${System.currentTimeMillis()}.html")
+        toast("Saving offline copy…")
+        Thread {
+            val saved = try {
+                val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 10000
+                    readTimeout = 15000
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", if (tab.desktop) DESKTOP_UA else "Mozilla/5.0 (Android; Mobile) Gecko/144.0 Firefox/144.0")
                 }
-                toast("Saved offline copy (best for articles; live sessions may differ)")
-            } else {
-                toast("Could not capture offline copy of this page")
+                val code = conn.responseCode
+                if (code in 200..299) {
+                    val bytes = conn.inputStream.use { it.readBytes() }
+                    target.writeBytes(bytes)
+                    bytes.isNotEmpty()
+                } else false
+            } catch (_: Exception) {
+                false
             }
-        }
+            runOnUiThread {
+                if (saved && target.exists()) {
+                    store.saveOfflineBookmark(url, title, target.absolutePath)
+                    if (tabs.firstOrNull()?.currentUrl == Store.DEFAULT_HOMEPAGE) {
+                        loadInto(tabs.first(), Store.DEFAULT_HOMEPAGE)
+                    }
+                    toast("Saved offline copy")
+                } else {
+                    try { target.delete() } catch (_: Exception) {}
+                    toast("Could not capture offline copy of this page")
+                }
+            }
+        }.start()
     }
 
     private fun openOfflineSavedPage(bookmark: Bookmark) {
@@ -1378,12 +1488,15 @@ open class MainActivity : AppCompatActivity() {
             toast("Offline copy is no longer available on device")
             return
         }
+        val isHtml = file.name.endsWith(".html", ignoreCase = true) || file.name.endsWith(".htm", ignoreCase = true)
+        val mime = if (isHtml) "text/html" else "multipart/related"
+        val ext = if (isHtml) ".html" else ".mht"
         val uri = PipraDownloadManager.shareUriForFile(this, file) ?: Uri.fromFile(file)
         val intent = Intent(this, LocalFileViewerActivity::class.java).apply {
             action = Intent.ACTION_VIEW
-            setDataAndType(uri, "multipart/related")
-            putExtra(LocalFileViewerActivity.EXTRA_DISPLAY_NAME, "${bookmark.title.ifBlank { "Saved Page" }}.mht")
-            putExtra(LocalFileViewerActivity.EXTRA_MIME_TYPE, "multipart/related")
+            setDataAndType(uri, mime)
+            putExtra(LocalFileViewerActivity.EXTRA_DISPLAY_NAME, "${bookmark.title.ifBlank { "Saved Page" }}$ext")
+            putExtra(LocalFileViewerActivity.EXTRA_MIME_TYPE, mime)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startActivity(intent)
@@ -1418,8 +1531,8 @@ open class MainActivity : AppCompatActivity() {
             .create()
         list.setOnItemClickListener { _, _, pos, _ ->
             shown.getOrNull(pos)?.let { e ->
-                val wv = current()?.webView
-                if (wv != null) navigate(wv, e.url) else createTab(e.url)
+                val tab = current()
+                if (tab != null) navigate(tab, e.url) else createTab(e.url)
             }
             dialog.dismiss()
         }
@@ -1452,7 +1565,7 @@ open class MainActivity : AppCompatActivity() {
                     .setTitle(b.title.ifBlank { b.url })
                     .setItems(choices) { _, idx ->
                         when (idx) {
-                            0 -> current()?.webView?.let { navigate(it, b.url) } ?: createTab(b.url)
+                            0 -> current()?.let { navigate(it, b.url) } ?: createTab(b.url)
                             1 -> openOfflineSavedPage(b)
                             2 -> { store.removeOfflineCopy(b.url); toast("Offline copy deleted") }
                             3 -> { store.removeBookmark(b.url); toast("Bookmark removed") }
@@ -1460,8 +1573,8 @@ open class MainActivity : AppCompatActivity() {
                     }
                     .show()
             } else {
-                val wv = current()?.webView
-                if (wv != null) navigate(wv, b.url) else createTab(b.url)
+                val tab = current()
+                if (tab != null) navigate(tab, b.url) else createTab(b.url)
                 dialog.dismiss()
             }
         }
@@ -1480,7 +1593,7 @@ open class MainActivity : AppCompatActivity() {
 
     private fun toggleBookmarkCurrent() {
         val tab = current() ?: return
-        val url = tab.webView.url?.takeIf { it.startsWith("http") } ?: run { toast("Open a page first"); return }
+        val url = tab.currentUrl?.takeIf { it.startsWith("http") } ?: run { toast("Open a page first"); return }
         toast(if (store.toggleBookmark(url, tab.title)) "Bookmarked" else "Bookmark removed")
     }
 
@@ -1499,17 +1612,45 @@ open class MainActivity : AppCompatActivity() {
     }
 
     private fun setupFindBar() {
-        findPrev.setOnClickListener { current()?.webView?.findNext(false) }
-        findNext.setOnClickListener { current()?.webView?.findNext(true) }
+        findPrev.setOnClickListener { runFind(findInput.text.toString(), backwards = true) }
+        findNext.setOnClickListener { runFind(findInput.text.toString(), backwards = false) }
         findClose.setOnClickListener { closeFind() }
-        findInput.addTextChangedListener(simpleWatcher { q -> current()?.webView?.findAllAsync(q) })
-        findInput.setOnEditorActionListener { _, _, _ -> current()?.webView?.findNext(true); true }
+        findInput.addTextChangedListener(simpleWatcher { q ->
+            if (q.isEmpty()) {
+                current()?.session?.finder?.clear()
+                findCount.text = "0/0"
+            } else {
+                runFind(q, backwards = false)
+            }
+        })
+        findInput.setOnEditorActionListener { _, _, _ ->
+            runFind(findInput.text.toString(), backwards = false); true
+        }
+    }
+
+    private fun runFind(query: String, backwards: Boolean) {
+        val finder = current()?.session?.finder ?: return
+        if (query.isEmpty()) {
+            finder.clear()
+            findCount.text = "0/0"
+            return
+        }
+        val flags = if (backwards) GeckoSession.FINDER_FIND_BACKWARDS else 0
+        finder.find(query, flags).accept { res ->
+            runOnUiThread {
+                if (res == null || res.total == 0) {
+                    findCount.text = "0/0"
+                } else {
+                    findCount.text = "${res.current}/${res.total}"
+                }
+            }
+        }
     }
 
     private fun openFind() {
-        val wv = current()?.webView ?: return
-        wv.setFindListener { active, count, _ -> findCount.text = if (count == 0) "0/0" else "${active + 1}/$count" }
+        if (current() == null) return
         findBar.visibility = View.VISIBLE
+        findCount.text = "0/0"
         findInput.requestFocus()
         (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(findInput, InputMethodManager.SHOW_IMPLICIT)
     }
@@ -1517,7 +1658,7 @@ open class MainActivity : AppCompatActivity() {
     private fun closeFind() {
         findBar.visibility = View.GONE
         findInput.setText("")
-        current()?.webView?.clearMatches()
+        current()?.session?.finder?.clear()
         hideKeyboard(findInput)
     }
 

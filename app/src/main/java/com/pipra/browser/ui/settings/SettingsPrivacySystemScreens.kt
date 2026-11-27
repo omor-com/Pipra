@@ -510,7 +510,7 @@ fun AboutPipraScreen() {
         item {
             InfoBanner(
                 title = "Engine & Extension Compatibility",
-                body = "Pipra uses Android WebView + androidx.webkit for page rendering, multi-tab browsing, isolated :incognito windows, and saved offline web archives. Because it uses WebView (not GeckoView), Firefox/WebExtension (.xpi) add-ons are not supported; built-in Ad Blocker tiers, 7–365 day Website Locks, Adult Protection, and DevTools CSS/JS Insert Rules are supported natively.",
+                body = "Pipra's core browser uses Mozilla GeckoView (GeckoRuntime + GeckoSession) for page rendering, multi-tab browsing, and isolated private sessions. Built-in Ad Blocker tiers, 7–365 day Website Locks, Adult Protection, and DevTools rules are supported natively.",
                 modifier = Modifier.testTag("about_pipra_engine_banner")
             )
         }

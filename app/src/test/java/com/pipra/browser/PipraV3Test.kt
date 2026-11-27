@@ -3,6 +3,7 @@ package com.pipra.browser
 import android.content.Context
 import android.net.Uri
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -312,8 +313,9 @@ class SettingsV3UiRobolectricTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("appearance_list").performScrollToNode(hasTestTag("theme_mode_dark"))
-        composeRule.onNodeWithTag("theme_mode_dark").performClick()
+        composeRule.onNodeWithTag("theme_mode_dark").assertIsDisplayed().performClick()
         composeRule.waitForIdle()
+        composeRule.onNodeWithTag("theme_mode_dark").assertIsSelected()
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         assertEquals(AppThemeMode.DARK, Store(ctx).themeMode)
 
@@ -339,7 +341,7 @@ class SettingsV3UiRobolectricTest {
         composeRule.onNodeWithTag("settings_item_about").performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("about_pipra_list").performScrollToNode(hasTestTag("about_pipra_engine_banner"))
+        composeRule.onNodeWithTag("about_pipra_list").performScrollToNode(hasTestTag("about_privacy_policy_btn"))
         composeRule.onNodeWithTag("about_privacy_policy_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Pipra Browser Privacy Policy (v3.0)", substring = true).assertIsDisplayed()
