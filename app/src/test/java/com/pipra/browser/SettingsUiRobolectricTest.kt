@@ -68,7 +68,7 @@ class SettingsUiRobolectricTest {
 
         composeRule.onNodeWithTag("website_blocking_list").performScrollToNode(hasTestTag("block_host_input"))
         composeRule.onNodeWithTag("block_host_input").performTextInput("m.youtube.com")
-        composeRule.onNodeWithTag("website_blocking_list").performScrollToNode(hasTestTag("block_add_rule_button"))
+        composeRule.onNodeWithTag("website_blocking_list").performScrollToNode(hasTestTag("website_blocking_after_form"))
         composeRule.onNodeWithTag("block_add_rule_button").performClick()
         composeRule.waitForIdle()
 

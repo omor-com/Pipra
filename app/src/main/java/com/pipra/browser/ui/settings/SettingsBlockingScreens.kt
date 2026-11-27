@@ -390,6 +390,8 @@ fun WebsiteBlockingSettingsScreen(state: SettingsUiState, vm: SettingsViewModel)
             }
         }
 
+        item { Spacer(Modifier.height(4.dp).testTag("website_blocking_after_form")) }
+
         if (state.blockedRules.isEmpty()) {
             item {
                 InfoBanner(

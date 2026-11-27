@@ -78,9 +78,14 @@ class SettingsActivity : ComponentActivity() {
                 }
                 val snackbarHostState = remember { SnackbarHostState() }
 
+                LaunchedEffect(currentSectionName) {
+                    snackbarHostState.currentSnackbarData?.dismiss()
+                }
+
                 LaunchedEffect(state.feedbackMessage) {
                     val msg = state.feedbackMessage
                     if (!msg.isNullOrBlank()) {
+                        snackbarHostState.currentSnackbarData?.dismiss()
                         snackbarHostState.showSnackbar(msg)
                         vm.clearFeedback()
                     }

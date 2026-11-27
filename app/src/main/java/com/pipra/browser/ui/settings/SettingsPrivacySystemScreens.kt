@@ -306,7 +306,7 @@ fun SearchEngineSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
                 }
             }
         }
-        item { Spacer(Modifier.height(16.dp)) }
+        item { Spacer(Modifier.height(80.dp).testTag("search_engine_footer")) }
     }
 }
 
@@ -518,7 +518,7 @@ fun AboutPipraScreen() {
                 body = "Pipra extends the open-source Injectra architecture. Optional manual filter updates use public domain lists (Peter Lowe Ad & Tracking Server List, StevenBlack Unified Hosts, AdGuard DNS Filter, and OISD NSFW). All rule evaluation stays strictly on your device."
             )
         }
-        item { Spacer(Modifier.height(16.dp)) }
+        item { Spacer(Modifier.height(80.dp).testTag("about_pipra_footer")) }
     }
 
     legalDialogTitle?.let { title ->

@@ -289,9 +289,9 @@ class SettingsV3UiRobolectricTest {
         composeRule.onNodeWithTag("settings_item_search_engine").performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("search_engine_list").performScrollToNode(hasTestTag("custom_search_input"))
+        composeRule.onNodeWithTag("search_engine_list").performScrollToNode(hasTestTag("search_engine_footer"))
         composeRule.onNodeWithTag("custom_search_input").performTextInput("https://kagi.com/search?q=%s")
-        composeRule.onNodeWithTag("search_engine_list").performScrollToNode(hasTestTag("save_custom_search_button"))
+        composeRule.onNodeWithTag("search_engine_list").performScrollToNode(hasTestTag("search_engine_footer"))
         composeRule.onNodeWithTag("save_custom_search_button").performClick()
         composeRule.waitForIdle()
         assertEquals(Store.CUSTOM_SEARCH_ENGINE, Store(ctx).searchEngine)
