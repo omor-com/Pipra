@@ -24,6 +24,8 @@ class BackupManager(private val context: Context) {
         val prefsObj = JSONObject()
             .put("homepage", store.homepage)
             .put("searchEngine", store.searchEngine)
+            .put("customSearchUrl", store.customSearchUrl)
+            .put("themeMode", store.themeMode.key)
             .put("desktopByDefault", store.desktopByDefault)
             .put("showTabStrip", store.showTabStrip)
             .put("blockImages", store.blockImages)
@@ -78,13 +80,17 @@ class BackupManager(private val context: Context) {
             val prefs = root.optJSONObject("preferences")
             if (prefs != null) {
                 store.homepage = prefs.optString("homepage", Store.DEFAULT_HOMEPAGE)
-                store.searchEngine = prefs.optString("searchEngine", "Google")
+                store.customSearchUrl = prefs.optString("customSearchUrl", "")
+                store.searchEngine = prefs.optString("searchEngine", Store.DEFAULT_SEARCH_ENGINE)
+                if (prefs.has("themeMode")) {
+                    store.themeMode = AppThemeMode.fromKey(prefs.optString("themeMode", AppThemeMode.LIGHT.key))
+                }
                 store.desktopByDefault = prefs.optBoolean("desktopByDefault", false)
                 store.showTabStrip = prefs.optBoolean("showTabStrip", true)
                 store.blockImages = prefs.optBoolean("blockImages", false)
                 store.shieldsEnabled = prefs.optBoolean("shieldsEnabled", true)
                 store.adBlockMode = AdBlockMode.fromKey(prefs.optString("adblock_mode", prefs.optString("adBlockMode", "high")))
-                store.adultProtectionEnabled = prefs.optBoolean("adultProtectionEnabled", false)
+                store.adultProtectionEnabled = prefs.optBoolean("adultProtectionEnabled", true)
                 store.httpsOnly = prefs.optBoolean("httpsOnly", true)
                 store.blockThirdPartyCookies = prefs.optBoolean("blockThirdPartyCookies", true)
                 store.blockPopups = prefs.optBoolean("blockPopups", true)

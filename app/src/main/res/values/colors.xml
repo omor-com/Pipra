@@ -1,15 +1,37 @@
 <resources>
-    <color name="toolbar">#14161A</color>
-    <color name="toolbar_dark">#0B0C0E</color>
-    <color name="surface_card">#1A1D23</color>
-    <color name="accent">#3B82F6</color>
-    <color name="accent_bright">#60A5FA</color>
-    <color name="text">#E6E8EC</color>
-    <color name="text_dim">#9CA3AF</color>
-    <color name="border_silver">#2E333D</color>
-    <color name="tab_active">#252932</color>
-    <color name="tab_inactive">#17191E</color>
+    <!-- Default V3 Light Theme palette -->
+    <color name="toolbar">#FFFFFF</color>
+    <color name="toolbar_dark">#F4F6F9</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="accent">#2563EB</color>
+    <color name="accent_bright">#3B82F6</color>
+    <color name="text">#111827</color>
+    <color name="text_dim">#4B5563</color>
+    <color name="border_silver">#D8DFE8</color>
+    <color name="tab_active">#FFFFFF</color>
+    <color name="tab_inactive">#E8EDF3</color>
     <color name="white">#FFFFFF</color>
     <color name="private_bar">#101520</color>
     <color name="private_dark">#080A0F</color>
+
+    <!-- Explicit light/dark tokens for dynamic runtime theming without recreating tabs -->
+    <color name="pipra_light_bg">#F4F6F9</color>
+    <color name="pipra_light_toolbar">#FFFFFF</color>
+    <color name="pipra_light_card">#FFFFFF</color>
+    <color name="pipra_light_text">#111827</color>
+    <color name="pipra_light_text_dim">#4B5563</color>
+    <color name="pipra_light_border">#D8DFE8</color>
+    <color name="pipra_light_tab_active">#FFFFFF</color>
+    <color name="pipra_light_tab_inactive">#E8EDF3</color>
+    <color name="pipra_light_accent">#2563EB</color>
+
+    <color name="pipra_dark_bg">#0B0C0E</color>
+    <color name="pipra_dark_toolbar">#14161A</color>
+    <color name="pipra_dark_card">#1A1D23</color>
+    <color name="pipra_dark_text">#E6E8EC</color>
+    <color name="pipra_dark_text_dim">#9CA3AF</color>
+    <color name="pipra_dark_border">#2E333D</color>
+    <color name="pipra_dark_tab_active">#252932</color>
+    <color name="pipra_dark_tab_inactive">#17191E</color>
+    <color name="pipra_dark_accent">#3B82F6</color>
 </resources>

@@ -1,0 +1,681 @@
+PIPRA BROWSER V3 — PROFESSIONAL UPGRADE MASTER PROMPT
+
+Feature Expansion • Native File Handling • Advanced Downloads • Custom Home Experience • Light/Dark Theme
+
+You are a senior Android browser engineer, Kotlin developer, GeckoView specialist, Android file-handling expert, UI/UX designer, browser security engineer, and GitHub Actions CI/CD engineer.
+
+Your task is to upgrade my existing Pipra Browser Android project to Version 3 (V3) by implementing the new features and improvements described in this specification.
+
+This is an existing-project upgrade, NOT a request to create a new browser from scratch.
+
+1. Existing Project and Non-Negotiable Rules
+
+Repository: https://github.com/omor-com/Pipra
+
+Browser name: Pipra Browser
+Developer: Muhammad Omor
+Platform: Android
+Existing engine: Preserve the project's current engine and architecture. If the existing project uses GeckoView, continue using GeckoView.
+
+Before making changes:
+
+1. Inspect the complete repository and identify the actual architecture, package name, application ID, Gradle configuration, navigation system, browser engine, existing features, theme implementation, permissions, and GitHub Actions workflows.
+2. Identify existing implementations that can be enhanced instead of duplicated.
+3. Prepare a concise implementation plan based on the actual source code.
+4. Implement V3 changes directly into the existing project.
+
+Strict preservation requirements
+
+- Never change the existing application ID, package name, signing configuration, or established identifiers without a genuine technical necessity and explicit authorization.
+- Preserve all working V1/V2 features and existing user data.
+- Do not replace the current application with a demo, mockup, template, or unrelated implementation.
+- Do not remove existing browser functionality merely to simplify development.
+- Do not introduce duplicate buttons, settings, menus, download systems, or navigation destinations.
+- Preserve bookmarks, history, saved settings, downloads, tabs, and other existing data during upgrades.
+- Keep the application compatible with its existing minimum Android version unless a documented technical limitation makes a change necessary.
+- Use the existing architecture and established dependencies wherever practical.
+- Do not add unnecessary libraries, external services, online dependencies, or permissions.
+- Never claim that a feature is implemented unless the corresponding code actually works.
+
+2. V3 Design Philosophy
+
+Pipra must feel like a carefully designed, modern, lightweight Android browser—not a generic AI-generated browser template.
+
+The design must be distinctive, practical, polished, and optimized for everyday mobile browsing.
+
+Prioritize:
+
+- Clear visual hierarchy.
+- Comfortable touch targets.
+- Consistent spacing and typography.
+- Smooth animations and transitions.
+- Fast navigation and responsive controls.
+- Clean layouts without unnecessary cards, widgets, or decorative sections.
+- Accessible contrast and readable text.
+- Proper loading, empty, error, and offline states.
+- Consistent Material-style interaction patterns, adapted to Pipra's own identity.
+
+Do not imitate another browser's interface. Maintain Pipra's recognizable visual identity.
+
+3. Theme System — Light by Default
+
+The default theme for Pipra Browser V3 must be LIGHT.
+
+This is a mandatory requirement.
+
+Light theme
+
+- Use a clean, professional, light background.
+- Use dark, readable text with carefully selected accent colors.
+- Maintain clear borders, dividers, surfaces, icons, and interactive states.
+- Ensure that the address bar, search field, menus, dialogs, settings, download manager, file viewer, and home screen all follow the light theme consistently.
+- Avoid excessive shadows, gradients, and unnecessary decoration.
+
+Dark theme
+
+Users must be able to switch to Dark Theme whenever they want.
+
+Provide a clear theme preference in Settings:
+
+- Light
+- Dark
+- System default, if supported by the existing architecture
+
+Light must remain the initial default for new installations. If the user explicitly selects Dark, remember that preference and restore it on subsequent launches.
+
+Do not force the application back to Light every time it opens.
+
+Changing themes must update the entire application consistently without unnecessarily restarting the browser or losing active tabs, form data, navigation state, or downloaded files.
+
+Use suitable colors for webpage controls and browser-owned interfaces. Do not inject CSS into arbitrary websites simply to force them into dark mode.
+
+4. Unique Pipra Home Screen
+
+Upgrade the existing home screen into a distinctive, professional Pipra experience.
+
+Do not create a crowded dashboard. Include only useful elements and preserve existing home-screen functionality.
+
+Home screen requirements
+
+- A refined search/address bar.
+- A compact search-engine selector.
+- Existing useful shortcuts and browser features, improved where appropriate.
+- Clear access to existing bookmarks, history, downloads, and other relevant features.
+- A clean, responsive layout that works on small Android displays.
+- Correct light and dark theme support.
+- Useful empty states when there are no bookmarks, history entries, or shortcuts.
+- Smooth interactions without unnecessary loading delays.
+
+Avoid filling the home screen with unrelated cards, advertisements, statistics, or promotional content.
+
+Search engine selection
+
+Google must be the default search engine for new installations.
+
+Allow users to switch search engines directly from the home screen without navigating into Settings.
+
+Provide a practical selection interface supporting the following engines where their search URLs are available:
+
+- Google
+- DuckDuckGo
+- Bing
+- Brave Search
+- Custom search URL, if implemented safely and reliably
+
+Display the selected search engine's logo or recognizable icon neatly in a small area at the corner of the search bar.
+
+The logo must not dominate the search field or interfere with typing.
+
+Requirements:
+
+- Persist the user's selection.
+- Restore the selected engine after app restart.
+- Use the selected engine for new searches.
+- Keep direct URL navigation working.
+- Distinguish a search query from a valid URL reliably.
+- Validate custom search URLs and avoid unsafe URL construction.
+- Provide a clear way to change the selection.
+
+Do not hardcode Google as the active engine on every launch if the user has selected another engine.
+
+5. Advanced Download Manager
+
+Upgrade the existing download implementation rather than creating a competing download system.
+
+The Download Manager must be suitable for everyday browser downloads and integrate with Android's storage and file-opening mechanisms.
+
+Supported download types
+
+Handle common downloadable files, including:
+
+- HTML and HTM
+- CSS and JavaScript files
+- TXT, JSON, and XML
+- PDF
+- Common image formats
+- ZIP and supported archive formats
+- APK files
+- Other file types provided by a website
+
+Use the correct MIME type where available and determine file types safely when MIME information is missing or unreliable.
+
+Download interface
+
+Display useful information for each download:
+
+- File name.
+- File type.
+- File size, when available.
+- Download progress.
+- Download speed, where measurable.
+- Download status.
+- Download location, where available.
+
+Provide appropriate actions:
+
+- Open completed file.
+- Pause and resume when supported by the server and download mechanism.
+- Cancel an active download.
+- Retry a failed download.
+- Rename a completed file where permitted.
+- Share a file.
+- Delete a downloaded file with appropriate confirmation.
+- Search and filter download history.
+- Open the containing folder when Android supports the action.
+
+Use meaningful states such as queued, downloading, paused, completed, failed, and canceled.
+
+Reliability
+
+- Preserve completed downloads across app restarts.
+- Recover download records where possible after process termination.
+- Handle network loss, HTTP errors, unavailable servers, insufficient storage, and permission failures gracefully.
+- Avoid duplicate downloads caused by repeated taps.
+- Do not report a download as completed until it actually finishes.
+- Support HTTP range-based resumption only when the server and implementation permit it.
+- Do not promise pause/resume for every server or file.
+- Respect Android storage restrictions and use appropriate APIs.
+- Never expose private file paths or bypass Android storage security.
+
+6. HTML Webpage Viewer — Render Real Webpages
+
+This is one of the most important V3 additions.
+
+When a user opens an HTML or HTM file in Pipra, the file should render as an actual webpage rather than displaying raw HTML source by default.
+
+Required behavior
+
+Support opening HTML files through:
+
+1. Pipra's own file picker or file-opening interface.
+2. Android's file manager using Open with Pipra.
+3. Android share/open intents when the incoming content is a supported HTML file.
+4. Completed HTML downloads through the Download Manager.
+
+Use Android content URIs and appropriate permissions instead of assuming every file has a directly accessible filesystem path.
+
+Webpage rendering
+
+The viewer should render the HTML document using the existing browser engine wherever appropriate.
+
+Preserve the page's actual appearance as closely as the available resources allow, including:
+
+- HTML structure.
+- CSS styling.
+- Layout and typography.
+- Images and icons.
+- Fonts.
+- JavaScript interactions.
+- Links and navigation within the document.
+- Locally referenced resources.
+- Responsive layout.
+
+When the HTML belongs to a website project or folder, resolve relative resources correctly when those files are accessible and the chosen implementation supports them.
+
+Do not simply load the HTML text into a text view and call it a webpage viewer.
+
+Local web project support
+
+Handle the following cases appropriately:
+
+- A standalone HTML file.
+- An HTML file with adjacent CSS, JavaScript, and image files.
+- A local website folder, where Android's document picker and permissions allow access.
+- A supported extracted ZIP containing a website project.
+
+If the required CSS, JavaScript, images, fonts, or other resources are missing, explain the limitation clearly instead of silently pretending that the original page is fully available.
+
+Do not automatically execute arbitrary HTML files in a privileged application context.
+
+Use suitable origin isolation, local-file access restrictions, and safe JavaScript settings. Avoid granting local documents unnecessary access to browser internals, credentials, cookies, or unrelated private files.
+
+Two viewing modes
+
+Provide both:
+
+Webpage View: Render the document as a webpage.
+
+Source Code View: Display the HTML source in a readable, syntax-friendly code viewer.
+
+Allow the user to switch between the two modes.
+
+Webpage View must be the primary/default mode when opening a supported HTML file.
+
+Do not confuse source-code inspection with actual webpage rendering.
+
+7. Unified Download & File Center
+
+Integrate download management and supported local-file access into a coherent, easy-to-understand interface.
+
+Avoid creating a confusing collection of unrelated file-management screens.
+
+The center should provide appropriate access to:
+
+- Active downloads.
+- Completed downloads.
+- Failed downloads.
+- Download history.
+- Supported local files that the user chooses to open.
+- Relevant file-opening actions.
+
+Use search, filters, file-type icons, status indicators, and clear actions.
+
+Where practical, allow the user to open supported files directly from this center.
+
+Do not automatically scan every personal file on the device. Use user-selected files and Android's appropriate file-access mechanisms.
+
+Do not duplicate Android's complete file manager when Pipra only needs to open and manage browser downloads.
+
+8. Local File Viewer
+
+Implement suitable viewing behavior for the following file types when technically supported.
+
+File type| Required behavior
+HTML / HTM| Rendered webpage view and source-code view
+TXT| Readable text viewer
+JSON| Formatted, readable JSON viewer
+XML| Readable source viewer
+CSS| Readable source viewer
+JavaScript| Readable source viewer
+PDF| Open using a suitable supported PDF viewer
+Images| Open in an image viewer with suitable zoom controls
+ZIP| Display archive contents and support safe extraction where implemented
+APK| Display file information and allow Android's normal package-installation flow when permitted
+
+Additional requirements:
+
+- Detect file types using available MIME information and safe fallbacks.
+- Handle unsupported and corrupted files gracefully.
+- Do not execute JavaScript files merely because the user opens them as source files.
+- Treat APK files as potentially unsafe and never bypass Android's installation confirmation or security protections.
+- For ZIP extraction, guard against path traversal, unexpected overwrites, and decompression resource exhaustion.
+- Use Android's document picker, content resolver, and storage APIs as appropriate.
+- Do not promise that every format will open internally if Android permissions or available dependencies prevent it.
+
+9. Offline Game
+
+Add a small, original Pipra-branded offline runner game that users can play when the internet connection is unavailable.
+
+The game must work completely offline without downloading external assets.
+
+Requirements
+
+- Original Pipra visual identity.
+- Smooth, responsive gameplay.
+- Touch-based jump controls.
+- Obstacles and collision detection.
+- Score and best-score tracking.
+- Restart option.
+- Clear pause or exit behavior where appropriate.
+- A polished game-over screen.
+- Responsive design for different Android display sizes.
+- Support for both Light and Dark themes.
+
+The game should be lightweight and must not interfere with browser navigation or downloads.
+
+Do not copy copyrighted artwork or branding from another browser's game.
+
+Offline error page
+
+When a navigation attempt fails because the device is offline, show a useful offline page with:
+
+- A Retry action.
+- A Home action.
+- An option to play the offline game.
+
+Do not replace every website error with the game automatically. Keep the game optional and easy to exit.
+
+Verify network failure where practical rather than assuming every navigation failure means the device has no internet.
+
+10. Context Menu and Browser Actions
+
+Improve the existing link context menu and browser action menus without duplicating existing features.
+
+Where appropriate, provide:
+
+- Open link.
+- Open link in a new tab.
+- Open link in a private tab, if private browsing is already supported.
+- Download link.
+- Copy link.
+- Share link.
+- Open downloaded file.
+- Relevant image actions supported by the existing browser engine.
+
+Only display actions that are relevant to the selected item.
+
+Avoid showing link-specific actions when the user has selected ordinary text or a different type of content.
+
+Preserve existing tab-management and navigation behavior.
+
+11. Undo Recently Closed Tabs
+
+If the current architecture supports reliable restoration, add an option to reopen a recently closed tab.
+
+Requirements:
+
+- Restore the relevant URL and tab state where practical.
+- Preserve existing tab management.
+- Avoid restoring sensitive private tabs into normal browsing history.
+- Do not claim to restore unavailable form data, authentication state, or page state.
+- Provide a clear action and avoid permanently retaining sensitive browsing information.
+
+If a reliable implementation would compromise privacy or require a major architectural rewrite, document the limitation and do not implement a misleading substitute.
+
+12. Offline Reading and Saved Pages
+
+Inspect the existing bookmarks and reading-related functionality before implementing anything new.
+
+If a saved-page or offline-reading feature does not already exist, consider a lightweight implementation that allows users to save selected pages for offline access.
+
+Requirements:
+
+- Let the user explicitly save a page.
+- Store the page and supported resources locally.
+- Show whether a saved page is available offline.
+- Provide open, refresh/update, and delete actions where appropriate.
+- Handle pages that rely on authentication, remote APIs, dynamic server data, or unavailable resources honestly.
+- Never promise that every website can be reproduced completely offline.
+- Avoid collecting or synchronizing saved pages with external services without user consent.
+
+Do not create a second bookmarks system or duplicate existing functionality.
+
+13. Extension Management
+
+Inspect the existing browser engine and extension architecture.
+
+If the current GeckoView configuration supports WebExtensions, improve the extension-management experience where feasible.
+
+Potential capabilities:
+
+- View supported installed extensions.
+- Enable or disable supported extensions.
+- Remove extensions with confirmation.
+- Display extension details and relevant permissions.
+- Explain when an extension is incompatible.
+
+Security requirements:
+
+- Follow the extension APIs and capabilities actually supported by the selected engine version.
+- Do not claim universal Chrome Web Store compatibility.
+- Do not install arbitrary extension code silently.
+- Do not grant extensions excessive permissions by default.
+- Keep extension management optional and consistent with the existing browser architecture.
+
+If a full extension installation system is outside the current architecture, implement only the feasible, tested portion and document what remains unsupported.
+
+14. Privacy Policy and Terms & Conditions
+
+Provide complete, readable Privacy Policy and Terms & Conditions documents accessible from the existing Settings or About area.
+
+Do not create duplicate Settings destinations if equivalent entries already exist.
+
+Privacy Policy
+
+The policy must accurately describe the actual V3 implementation, including relevant behavior for:
+
+- Browser history and bookmarks.
+- Cookies and website storage.
+- Downloads and local files.
+- Private browsing, if supported.
+- Search-engine requests.
+- Third-party websites and services.
+- Extension permissions, if supported.
+- Permissions and optional features.
+- Error reporting or analytics, if present.
+- Data retention, deletion, and any actual synchronization.
+- Developer contact and available privacy controls.
+
+Clearly distinguish data stored locally from data sent to websites or third-party services.
+
+Do not claim that Pipra never collects or transmits data unless the actual implementation supports that statement.
+
+Terms & Conditions
+
+Include clear terms covering:
+
+- Responsible use.
+- User responsibility for downloaded and opened files.
+- Third-party websites and external services.
+- Browser functionality and reasonable limitations.
+- Security and content risks.
+- Intellectual property.
+- Applicable disclaimers.
+- Developer contact.
+
+Use appropriate, professional wording and avoid unsupported claims of legal compliance.
+
+The documents must be available without requiring the user to create an account or sign in.
+
+Do not invent a company address, legal entity, certification, or contact details.
+
+Use the existing project's verified contact information if available. If any essential information is missing, leave it as a clearly documented item requiring confirmation rather than inventing it.
+
+15. Donate to Developer
+
+Add Donate to Developer to the existing three-dot menu.
+
+Destination:
+
+https://www.supportkori.com/muhammedomor
+
+Requirements:
+
+- Open the exact destination above.
+- Use a clear, professional label.
+- Ensure it works in both Light and Dark themes.
+- Avoid interruptive donation pop-ups.
+- Do not require a donation to use browser functionality.
+- Do not add a payment SDK or collect payment information inside Pipra.
+- Reuse an existing menu destination if one already serves the same purpose rather than adding duplicates.
+
+16. Navigation, Settings, and Menu Consistency
+
+Audit the existing browser navigation and Settings before changing them.
+
+- Preserve existing back, forward, reload, home, tabs, bookmarks, history, and downloads functionality.
+- Organize existing features logically.
+- Use consistent names and icons.
+- Keep important actions easy to reach.
+- Avoid duplicate menu entries.
+- Keep infrequently used settings out of the main browsing area.
+- Ensure menu items remain usable on small screens.
+- Make dialogs and bottom sheets fit the current Android window and keyboard.
+- Preserve existing privacy controls and private browsing behavior.
+
+Do not introduce a large dashboard simply to make the application appear feature-rich.
+
+17. Performance and Stability
+
+V3 must remain practical for everyday use on Android devices with limited resources.
+
+- Avoid unnecessary background services.
+- Avoid keeping large files entirely in memory.
+- Use streaming or appropriate buffered file operations.
+- Avoid blocking the main thread with downloads, parsing, extraction, or expensive rendering.
+- Handle large HTML files and archives safely.
+- Prevent duplicate observers, leaked browser views, and unnecessary WebView/GeckoView instances.
+- Preserve browser state when changing themes.
+- Handle activity recreation and process termination where practical.
+- Release resources when tabs, viewers, or downloads are closed.
+- Handle missing files, permission revocation, network interruptions, and low storage.
+- Maintain accessibility and usable touch targets.
+- Avoid adding unnecessary network requests.
+
+18. Security Requirements
+
+Treat website content and downloaded files as untrusted input.
+
+- Validate incoming content URIs and intents.
+- Do not trust file extensions as proof of file safety.
+- Avoid unsafe JavaScript execution in privileged contexts.
+- Do not expose local file contents to arbitrary websites.
+- Apply suitable isolation when rendering local HTML.
+- Do not silently bypass certificate errors or browser security checks.
+- Do not disable existing security protections to make a feature appear functional.
+- Handle ZIP extraction paths safely.
+- Keep private browsing data separate from persistent normal browsing data wherever the existing implementation supports this separation.
+- Request only the Android permissions actually required.
+
+Document any security-sensitive trade-offs.
+
+19. GitHub Actions and Build Reliability
+
+Inspect the repository's current GitHub Actions configuration before changing it.
+
+The upgraded project must build using the repository's established CI workflow.
+
+Requirements:
+
+- Preserve the existing application ID and signing approach.
+- Fix actual Gradle, Kotlin, dependency, Android SDK, and CI issues encountered during the upgrade.
+- Avoid arbitrary dependency upgrades.
+- Use compatible and maintained dependency versions where changes are necessary.
+- Do not hardcode signing passwords, tokens, or other secrets.
+- Use GitHub Secrets for sensitive CI values when required.
+- Produce the appropriate debug APK and/or release artifacts supported by the existing workflow.
+- Make generated artifacts easy to locate in the workflow run.
+- Preserve repository privacy and access settings.
+- Do not claim a successful build without actual build evidence.
+
+Run available tests and builds. Fix errors caused by the implementation before declaring completion.
+
+20. Testing and Acceptance Criteria
+
+V3 is not complete merely because the UI looks correct.
+
+Verify the following against the actual implementation:
+
+Theme
+
+- Fresh installation starts in Light Theme.
+- Users can switch to Dark Theme.
+- The chosen theme persists after restart.
+- Theme changes do not unnecessarily destroy active browser state.
+
+Search and Home
+
+- Google is the initial search engine.
+- Users can switch engines directly from the home screen.
+- The selected engine's logo is displayed correctly.
+- The selected engine persists after restart.
+- Direct URL navigation and search queries both work.
+
+Downloads
+
+- Download progress and final status are accurate.
+- Failures and network interruptions are handled.
+- Supported files can be opened, shared, or deleted appropriately.
+- Pause/resume is offered only when supported.
+- Existing download records are not unnecessarily lost.
+
+HTML and File Handling
+
+- A standalone HTML file renders as a webpage.
+- Source Code View shows the underlying HTML source.
+- Relative CSS, images, fonts, and scripts work when the required resources are available and supported.
+- Android file-opening intents are handled correctly.
+- Unsupported or inaccessible resources produce understandable errors.
+- Opening untrusted HTML does not grant it privileged access to private browser data.
+
+Offline Game
+
+- The game starts without an internet connection.
+- Gameplay, score, restart, and exit behavior work.
+- The game does not interfere with browser navigation.
+
+Existing Functionality
+
+- Existing tabs, bookmarks, history, settings, and privacy features continue to work.
+- Existing user data is preserved.
+- No duplicate menus or redundant features are introduced.
+
+CI
+
+- The applicable GitHub Actions workflow completes successfully.
+- Build artifacts are generated and accessible.
+- Any remaining unsupported behavior is explicitly documented.
+
+21. Implementation Workflow
+
+Follow this order:
+
+Phase 1 — Repository Audit
+
+- Inspect the actual source code and architecture.
+- Record existing features and identify reusable components.
+- Identify technical risks and required dependencies.
+
+Phase 2 — Architecture and UX
+
+- Plan how V3 additions integrate into existing navigation, Settings, downloads, and storage.
+- Define the Light/Dark theme behavior.
+- Avoid duplicate screens and redundant data stores.
+
+Phase 3 — Core V3 Implementation
+
+- Implement the Light-by-default theme system.
+- Improve the home screen and search-engine selection.
+- Upgrade the Download Manager.
+- Implement rendered HTML viewing and source-code viewing.
+- Implement the unified Download & File Center and supported file-opening flows.
+- Add the offline game and offline error actions.
+- Integrate the remaining approved menu, privacy, and usability improvements.
+
+Phase 4 — Reliability and Security
+
+- Test file access, content URIs, resource resolution, download failures, permissions, and theme persistence.
+- Fix regressions and preserve existing data.
+- Test unsupported cases and provide meaningful errors.
+
+Phase 5 — Build and Verification
+
+- Run applicable automated tests.
+- Build using the repository's GitHub Actions workflow.
+- Fix actual implementation and build errors.
+- Report which features were verified and which remain limited.
+
+22. Final Deliverables
+
+When the implementation is finished, provide:
+
+1. A concise summary of the V3 changes.
+2. A list of the important files created or modified.
+3. A list of preserved existing features.
+4. Details of the Light/Dark theme implementation.
+5. A summary of download and HTML/file viewer capabilities.
+6. Test and GitHub Actions build results.
+7. Any limitations or features that could not be completed.
+8. Instructions for obtaining the generated APK or other release artifacts.
+
+Do not provide fabricated test results, fake download links, or claims that an unimplemented feature is complete.
+
+Final Instruction
+
+Work on the actual existing Pipra Browser repository.
+
+Implement the V3 additions as a careful, production-oriented upgrade. Preserve existing functionality, user data, application identity, and security. The default theme must be Light, with a persistent user-selectable Dark Theme. HTML files must render as actual webpages whenever their required resources are available, with a separate source-code viewing option.
+
+Prioritize correctness, security, performance, maintainability, and a polished user experience over adding features merely for the sake of quantity.
+
+Do not stop at a visual mockup. Implement, build, test, and report the actual results supported by the repository and CI workflow.

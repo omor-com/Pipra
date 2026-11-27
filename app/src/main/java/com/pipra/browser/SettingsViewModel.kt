@@ -12,8 +12,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class SettingsUiState(
+    val themeMode: AppThemeMode = AppThemeMode.LIGHT,
     val homepage: String = Store.DEFAULT_HOMEPAGE,
-    val searchEngine: String = "DuckDuckGo",
+    val searchEngine: String = Store.DEFAULT_SEARCH_ENGINE,
+    val customSearchUrl: String = "",
     val desktopByDefault: Boolean = false,
     val showTabStrip: Boolean = true,
     val blockImages: Boolean = false,
@@ -64,8 +66,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val adCached = adBlocker.cachedRuleCount()
             val adultCount = adultBlocker.activeDomainCount()
             _state.value = _state.value.copy(
+                themeMode = store.themeMode,
                 homepage = store.homepage,
                 searchEngine = store.searchEngine,
+                customSearchUrl = store.customSearchUrl,
                 desktopByDefault = store.desktopByDefault,
                 showTabStrip = store.showTabStrip,
                 blockImages = store.blockImages,
@@ -97,6 +101,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _state.value = _state.value.copy(feedbackMessage = null)
     }
 
+    fun setThemeMode(mode: AppThemeMode) {
+        store.themeMode = mode
+        _state.value = _state.value.copy(
+            themeMode = mode,
+            feedbackMessage = "Theme updated to ${mode.label}"
+        )
+    }
+
     fun setHomepage(raw: String) {
         val t = raw.trim()
         val normalized = when {
@@ -110,7 +122,26 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setSearchEngine(name: String) {
         store.searchEngine = name
+        _state.value = _state.value.copy(searchEngine = store.searchEngine)
         refresh()
+    }
+
+    fun setCustomSearchUrl(rawUrl: String): Boolean {
+        val valid = DomainUtils.validateCustomSearchUrl(rawUrl)
+        if (valid == null) {
+            _state.value = _state.value.copy(
+                feedbackMessage = "Enter a valid http(s) URL (for example: https://search.example.com/?q=%s)"
+            )
+            return false
+        }
+        store.customSearchUrl = valid
+        store.searchEngine = Store.CUSTOM_SEARCH_ENGINE
+        _state.value = _state.value.copy(
+            customSearchUrl = valid,
+            searchEngine = Store.CUSTOM_SEARCH_ENGINE,
+            feedbackMessage = "Custom search engine saved and selected"
+        )
+        return true
     }
 
     fun setDesktopByDefault(enabled: Boolean) {

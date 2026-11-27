@@ -17,6 +17,16 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.Pipra">
 
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <activity
             android:name="com.pipra.browser.SplashActivity"
             android:exported="true"
@@ -57,6 +67,88 @@
             android:exported="false"
             android:label="@string/settings_title"
             android:theme="@style/Theme.Pipra" />
+
+        <activity
+            android:name="com.pipra.browser.DownloadFileCenterActivity"
+            android:exported="false"
+            android:label="@string/downloads_center_title"
+            android:theme="@style/Theme.Pipra" />
+
+        <activity
+            android:name="com.pipra.browser.OfflineGameActivity"
+            android:exported="false"
+            android:label="@string/offline_game_title"
+            android:theme="@style/Theme.Pipra" />
+
+        <activity
+            android:name="com.pipra.browser.LocalFileViewerActivity"
+            android:exported="true"
+            android:label="@string/file_viewer_title"
+            android:theme="@style/Theme.Pipra"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode">
+            <!-- Open supported local files directly via "Open with Pipra" -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="text/html" />
+                <data android:mimeType="application/xhtml+xml" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="text/xml" />
+                <data android:mimeType="application/xml" />
+                <data android:mimeType="text/css" />
+                <data android:mimeType="application/javascript" />
+                <data android:mimeType="text/javascript" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:mimeType="application/vnd.android.package-archive" />
+            </intent-filter>
+            <!-- Fallback for file managers that send */* or application/octet-stream with known extensions -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.html" />
+                <data android:pathPattern=".*\\.htm" />
+                <data android:pathPattern=".*\\.HTML" />
+                <data android:pathPattern=".*\\.HTM" />
+                <data android:pathPattern=".*\\.txt" />
+                <data android:pathPattern=".*\\.json" />
+                <data android:pathPattern=".*\\.xml" />
+                <data android:pathPattern=".*\\.css" />
+                <data android:pathPattern=".*\\.js" />
+                <data android:pathPattern=".*\\.pdf" />
+                <data android:pathPattern=".*\\.zip" />
+                <data android:pathPattern=".*\\.apk" />
+            </intent-filter>
+            <!-- Handle Share -> Pipra for supported files -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/html" />
+                <data android:mimeType="application/xhtml+xml" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="text/xml" />
+                <data android:mimeType="application/xml" />
+                <data android:mimeType="text/css" />
+                <data android:mimeType="application/javascript" />
+                <data android:mimeType="text/javascript" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/vnd.android.package-archive" />
+            </intent-filter>
+        </activity>
 
     </application>
 </manifest>

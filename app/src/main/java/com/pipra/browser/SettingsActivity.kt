@@ -63,8 +63,15 @@ class SettingsActivity : ComponentActivity() {
         val initialSection = SettingsSection.entries.firstOrNull { it.name == initialSectionName }
 
         setContent {
-            PipraTheme {
-                val state by vm.state.collectAsStateWithLifecycle()
+            val state by vm.state.collectAsStateWithLifecycle()
+            PipraTheme(themeMode = state.themeMode) {
+                val isDark = com.pipra.browser.ui.theme.LocalPipraColors.current.isDark
+                androidx.compose.runtime.SideEffect {
+                    val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                    controller.isAppearanceLightStatusBars = !isDark
+                    controller.isAppearanceLightNavigationBars = !isDark
+                }
+
                 var currentSectionName by rememberSaveable { mutableStateOf(initialSection?.name) }
                 val currentSection = currentSectionName?.let { name ->
                     SettingsSection.entries.firstOrNull { it.name == name }

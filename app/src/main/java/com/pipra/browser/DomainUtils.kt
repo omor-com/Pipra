@@ -120,6 +120,32 @@ object DomainUtils {
     }
 
     /**
+     * Validates a user-entered custom search engine URL template.
+     * Requires https:// or http:// with a valid host. Supports optional "%s" query placeholder.
+     */
+    fun validateCustomSearchUrl(rawInput: String): String? {
+        val t = rawInput.trim()
+        if (t.isEmpty() || t.any { it.isWhitespace() || it.isISOControl() }) return null
+        val lower = t.lowercase(Locale.ROOT)
+        if (!lower.startsWith("https://") && !lower.startsWith("http://")) return null
+        val canonical = if (lower.startsWith("https://")) "https://" + t.substring(8) else "http://" + t.substring(7)
+        val probe = canonical.replace("%s", "query")
+        val host = extractHostFromUrl(probe) ?: return null
+        if (host.isBlank()) return null
+        return canonical
+    }
+
+    /** Formats a search URL from a template that may contain %s or act as a query prefix. */
+    fun formatSearchUrl(searchTemplate: String, query: String): String {
+        val encoded = Uri.encode(query)
+        return if (searchTemplate.contains("%s")) {
+            searchTemplate.replace("%s", encoded)
+        } else {
+            searchTemplate + encoded
+        }
+    }
+
+    /**
      * Resolves typed address-bar input into a safe URL or search engine query.
      * Never returns javascript:, file:, content:, data:, or blob: URLs.
      */
@@ -135,7 +161,7 @@ object DomainUtils {
         if (lower.startsWith("http://") || lower.startsWith("https://")) {
             val canonical = if (lower.startsWith("https://")) "https://" + t.substring(8) else "http://" + t.substring(7)
             val host = extractHostFromUrl(canonical)
-            return if (host != null) canonical else searchTemplate + Uri.encode(t)
+            return if (host != null) canonical else formatSearchUrl(searchTemplate, t)
         }
         // Any explicit non-http(s) scheme (javascript:, file:, content:, data:, etc.) is treated as search text.
         val colonIdx = t.indexOf(':')
@@ -144,7 +170,7 @@ object DomainUtils {
             val afterColon = t.substring(colonIdx + 1).substringBefore('/').substringBefore('?').substringBefore('#')
             val isPort = afterColon.toIntOrNull()?.let { it in 1..65535 } == true
             if (!isPort || beforeColon in UNSAFE_SCHEMES) {
-                return searchTemplate + Uri.encode(t)
+                return formatSearchUrl(searchTemplate, t)
             }
         }
         if (!t.contains(' ')) {
@@ -153,7 +179,7 @@ object DomainUtils {
                 return "https://$t"
             }
         }
-        return searchTemplate + Uri.encode(t)
+        return formatSearchUrl(searchTemplate, t)
     }
 
     /** Sanitizes a suggested download filename to prevent path traversal or hidden tricks. */
@@ -165,3 +191,4 @@ object DomainUtils {
         return base.ifEmpty { "download_${System.currentTimeMillis()}" }.take(180)
     }
 }
+

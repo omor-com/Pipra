@@ -16,4 +16,7 @@
     <string name="about_tagline">Private Android Web Browser</string>
     <string name="about_dev_line">Developed by Muhammad Omor</string>
     <string name="settings_title">Pipra Settings</string>
+    <string name="downloads_center_title">Downloads &amp; Files</string>
+    <string name="file_viewer_title">Pipra File Viewer</string>
+    <string name="offline_game_title">Pipra Ant Dash</string>
 </resources>

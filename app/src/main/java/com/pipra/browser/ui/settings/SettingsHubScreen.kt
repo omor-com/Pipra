@@ -87,7 +87,7 @@ fun SettingsHubScreen(
         item { Spacer(Modifier.height(6.dp)) }
         items(SettingsSection.entries) { section ->
             val subtitle = when (section) {
-                SettingsSection.APPEARANCE -> "Start page, tab strip, desktop default"
+                SettingsSection.APPEARANCE -> "${state.themeMode.label} theme · Start page, tab strip, desktop"
                 SettingsSection.AD_BLOCKER ->
                     if (state.adBlockEnabled) "${state.adBlockMode.label} mode · ${state.adBlockTotalBlocked} blocked"
                     else "Off"
@@ -97,10 +97,12 @@ fun SettingsHubScreen(
                     else "Off"
                 SettingsSection.PRIVACY -> "HTTPS-only, 3P cookies, pop-ups, tracking params"
                 SettingsSection.SECURITY -> "JavaScript, TLS validation, Safe Browsing"
-                SettingsSection.DOWNLOADS -> "${state.downloads.size} recorded · App Downloads folder"
-                SettingsSection.SEARCH_ENGINE -> state.searchEngine
+                SettingsSection.DOWNLOADS -> "${state.downloads.size} recorded · Download & File Center"
+                SettingsSection.SEARCH_ENGINE ->
+                    if (state.searchEngine == Store.CUSTOM_SEARCH_ENGINE) "Custom (${state.customSearchUrl.take(32)})"
+                    else state.searchEngine
                 SettingsSection.DATA_MANAGEMENT -> "Clear history, cookies, site data, cache"
-                SettingsSection.ABOUT -> "Pipra 2.0 · Developed by Muhammad Omor"
+                SettingsSection.ABOUT -> "Pipra 3.0 · Privacy Policy, Terms & Attribution"
             }
 
             Card(
@@ -158,10 +160,40 @@ fun AppearanceSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp)
+            .testTag("appearance_list"),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item { Spacer(Modifier.height(4.dp)) }
+        item {
+            SectionCard("App Theme") {
+                Text(
+                    text = "Applies across Pipra browser chrome, Settings, Home, Downloads, and Local Viewer without forcing dark mode onto websites.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PipraColors.SilverMuted
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    com.pipra.browser.AppThemeMode.entries.forEach { mode ->
+                        val selected = state.themeMode == mode
+                        androidx.compose.material3.FilterChip(
+                            selected = selected,
+                            onClick = { vm.setThemeMode(mode) },
+                            label = { Text(mode.label) },
+                            modifier = Modifier.testTag("theme_mode_${mode.key}"),
+                            colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = PipraColors.ElectricBlue.copy(alpha = 0.18f),
+                                selectedLabelColor = PipraColors.ElectricBlueLight,
+                                labelColor = PipraColors.SilverMuted
+                            )
+                        )
+                    }
+                }
+            }
+        }
         item {
             SectionCard("Homepage") {
                 OutlinedTextField(
@@ -222,8 +254,8 @@ fun AppearanceSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
         }
         item {
             InfoBanner(
-                title = "Matte Black & Silver Theme",
-                body = "Pipra uses a distraction-free Matte Black surface palette with Silver typography and restrained Electric Blue highlights."
+                title = "Light & Dark Pipra Theme",
+                body = "Pipra defaults to a clean Light appearance and lets you switch instantly between Light, Dark, and System default without restarting tabs."
             )
         }
         item { Spacer(Modifier.height(16.dp)) }
@@ -278,7 +310,7 @@ fun SettingSwitchRow(
             onCheckedChange = onCheckedChange,
             modifier = Modifier.testTag(testTag),
             colors = SwitchDefaults.colors(
-                checkedThumbColor = PipraColors.SilverPrimary,
+                checkedThumbColor = androidx.compose.ui.graphics.Color.White,
                 checkedTrackColor = PipraColors.ElectricBlue,
                 uncheckedThumbColor = PipraColors.SilverMuted,
                 uncheckedTrackColor = PipraColors.CardElevated

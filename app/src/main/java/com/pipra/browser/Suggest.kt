@@ -15,6 +15,7 @@ data class Suggestion(val title: String, val url: String, val kind: Kind) {
 
 class SuggestAdapter(
     context: Context,
+    private val isDarkTheme: () -> Boolean = { false },
     private val source: () -> List<Suggestion>
 ) : ArrayAdapter<Suggestion>(context, 0) {
 
@@ -26,7 +27,8 @@ class SuggestAdapter(
 
     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
         val row = convertView ?: inflater.inflate(android.R.layout.simple_list_item_2, parent, false)
-        row.setBackgroundColor(0xFF14161A.toInt())
+        val dark = isDarkTheme()
+        row.setBackgroundColor(if (dark) 0xFF14161A.toInt() else 0xFFFFFFFF.toInt())
         val s = items[position]
         val tag = when (s.kind) {
             Suggestion.Kind.HISTORY -> "History · "
@@ -36,12 +38,12 @@ class SuggestAdapter(
         }
         row.findViewById<TextView>(android.R.id.text1).apply {
             text = tag + s.title
-            setTextColor(0xFFE6E8EC.toInt())
+            setTextColor(if (dark) 0xFFE6E8EC.toInt() else 0xFF111827.toInt())
             maxLines = 1
         }
         row.findViewById<TextView>(android.R.id.text2).apply {
             text = s.url
-            setTextColor(0xFF9CA3AF.toInt())
+            setTextColor(if (dark) 0xFF9CA3AF.toInt() else 0xFF4B5563.toInt())
             maxLines = 1
             textSize = 12f
         }
@@ -77,13 +79,13 @@ class SuggestAdapter(
 
     companion object {
         val TOP_SITES: List<Suggestion> = listOf(
+            "Google" to "https://www.google.com",
             "DuckDuckGo" to "https://duckduckgo.com",
             "Wikipedia" to "https://www.wikipedia.org",
             "GitHub" to "https://github.com",
             "Stack Overflow" to "https://stackoverflow.com",
             "Brave Search" to "https://search.brave.com",
             "Startpage" to "https://www.startpage.com",
-            "Google" to "https://www.google.com",
             "Bing" to "https://www.bing.com"
         ).map { Suggestion(it.first, it.second, Suggestion.Kind.TOP_SITE) }
     }

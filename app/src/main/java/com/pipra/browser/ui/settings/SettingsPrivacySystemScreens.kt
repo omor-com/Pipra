@@ -136,16 +136,36 @@ fun SecuritySettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
 
 @Composable
 fun DownloadsSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item { Spacer(Modifier.height(4.dp)) }
         item {
+            SectionCard("Download & File Center") {
+                Button(
+                    onClick = {
+                        ctx.startActivity(android.content.Intent(ctx, com.pipra.browser.DownloadFileCenterActivity::class.java))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PipraColors.ElectricBlue),
+                    modifier = Modifier.fillMaxWidth().testTag("open_downloads_center_button")
+                ) {
+                    Text("Open Download & File Center")
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "View live download progress, pause/resume supported transfers, share, rename, delete, and open local HTML websites, PDFs, ZIPs, JSON, TXT, images, and APKs.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PipraColors.SilverMuted
+                )
+            }
+        }
+        item {
             SectionCard("Download Behavior") {
                 SettingSwitchRow(
                     title = "Confirm before downloading",
-                    subtitle = "Show filename and host confirmation dialog before queuing DownloadManager",
+                    subtitle = "Show filename and host confirmation dialog before starting downloads",
                     checked = state.askBeforeDownload,
                     testTag = "switch_ask_download",
                     onCheckedChange = vm::setAskBeforeDownload
@@ -193,6 +213,8 @@ fun DownloadsSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
 
 @Composable
 fun SearchEngineSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
+    var customInput by remember(state.customSearchUrl) { mutableStateOf(state.customSearchUrl) }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -204,7 +226,7 @@ fun SearchEngineSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { vm.setSearchEngine(engine) }
-                    .testTag("search_engine_${engine.lowercase()}"),
+                    .testTag("search_engine_${engine.lowercase().replace(' ', '_')}"),
                 shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = PipraColors.Charcoal),
                 border = BorderStroke(1.dp, if (selected) PipraColors.ElectricBlue else PipraColors.SilverBorder)
@@ -226,6 +248,57 @@ fun SearchEngineSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
                             style = MaterialTheme.typography.bodySmall,
                             color = PipraColors.SilverMuted
                         )
+                    }
+                }
+            }
+        }
+        item {
+            val customSelected = state.searchEngine == Store.CUSTOM_SEARCH_ENGINE
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = PipraColors.Charcoal),
+                border = BorderStroke(1.dp, if (customSelected) PipraColors.ElectricBlue else PipraColors.SilverBorder)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable(enabled = state.customSearchUrl.isNotBlank()) {
+                            vm.setSearchEngine(Store.CUSTOM_SEARCH_ENGINE)
+                        }
+                    ) {
+                        RadioButton(
+                            selected = customSelected,
+                            onClick = {
+                                if (state.customSearchUrl.isNotBlank()) vm.setSearchEngine(Store.CUSTOM_SEARCH_ENGINE)
+                            },
+                            enabled = state.customSearchUrl.isNotBlank(),
+                            colors = RadioButtonDefaults.colors(selectedColor = PipraColors.ElectricBlue)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Custom Search URL",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = PipraColors.SilverPrimary
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    androidx.compose.material3.OutlinedTextField(
+                        value = customInput,
+                        onValueChange = { customInput = it },
+                        label = { Text("Search URL template (use %s for query)") },
+                        placeholder = { Text("https://search.example.com/?q=%s") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("custom_search_input"),
+                        colors = pipraTextFieldColors()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = { vm.setCustomSearchUrl(customInput) },
+                        colors = ButtonDefaults.buttonColors(containerColor = PipraColors.ElectricBlue),
+                        modifier = Modifier.testTag("save_custom_search_button")
+                    ) {
+                        Text("Save & Use Custom Engine")
                     }
                 }
             }
@@ -319,6 +392,10 @@ fun DataManagementScreen(vm: SettingsViewModel) {
 
 @Composable
 fun AboutPipraScreen() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var legalDialogTitle by remember { mutableStateOf<String?>(null) }
+    var legalDialogBody by remember { mutableStateOf("") }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -335,11 +412,20 @@ fun AboutPipraScreen() {
                     modifier = Modifier.fillMaxWidth().padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_pipra_ant_mark),
-                        contentDescription = "Pipra Logo",
-                        modifier = Modifier.size(84.dp)
-                    )
+                    androidx.compose.material3.Surface(
+                        color = PipraColors.CardElevated,
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.size(88.dp)
+                    ) {
+                        androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_pipra_ant_mark),
+                                contentDescription = "Pipra Logo",
+                                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(PipraColors.SilverPrimary),
+                                modifier = Modifier.size(58.dp)
+                            )
+                        }
+                    }
                     Spacer(Modifier.height(12.dp))
                     Text(
                         text = "Pipra",
@@ -348,7 +434,7 @@ fun AboutPipraScreen() {
                         color = PipraColors.SilverPrimary
                     )
                     Text(
-                        text = "Private Android Web Browser · v2.0",
+                        text = "Private Android Web Browser · v3.0",
                         style = MaterialTheme.typography.bodyMedium,
                         color = PipraColors.ElectricBlueLight
                     )
@@ -359,21 +445,145 @@ fun AboutPipraScreen() {
                         fontWeight = FontWeight.SemiBold,
                         color = PipraColors.SilverPrimary
                     )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "muhammedomor.dev@gmail.com",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = PipraColors.SilverMuted
+                    )
+                }
+            }
+        }
+        item {
+            SectionCard("Legal & Documentation") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            legalDialogTitle = "Privacy Policy"
+                            legalDialogBody = PIPRA_PRIVACY_POLICY
+                        },
+                        modifier = Modifier.weight(1f).testTag("about_privacy_policy_btn"),
+                        border = BorderStroke(1.dp, PipraColors.SilverBorder)
+                    ) {
+                        Text("Privacy Policy", color = PipraColors.SilverPrimary)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            legalDialogTitle = "Terms & Conditions"
+                            legalDialogBody = PIPRA_TERMS_AND_CONDITIONS
+                        },
+                        modifier = Modifier.weight(1f).testTag("about_terms_btn"),
+                        border = BorderStroke(1.dp, PipraColors.SilverBorder)
+                    ) {
+                        Text("Terms & Conditions", color = PipraColors.SilverPrimary)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        try {
+                            ctx.startActivity(
+                                android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://github.com/omor-com/Pipra")
+                                )
+                            )
+                        } catch (_: Exception) {}
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, PipraColors.SilverBorder)
+                ) {
+                    Text("Source Code: github.com/omor-com/Pipra", color = PipraColors.ElectricBlueLight)
                 }
             }
         }
         item {
             InfoBanner(
-                title = "Architecture & Attribution",
-                body = "Pipra is built on top of the open-source Injectra Android WebView browser architecture, preserving multi-tab browsing, isolated :incognito private windows, Cookie Manager, and HTTP Developer Workbench tools while adding tiered Ad Blocking, 7–365 day locked Website Blocking, and offline-first Adult Website Protection."
+                title = "Engine & Extension Compatibility",
+                body = "Pipra uses Android WebView + androidx.webkit for page rendering, multi-tab browsing, isolated :incognito windows, and saved offline web archives. Because it uses WebView (not GeckoView), Firefox/WebExtension (.xpi) add-ons are not supported; built-in Ad Blocker tiers, 7–365 day Website Locks, Adult Protection, and DevTools CSS/JS Insert Rules are supported natively."
             )
         }
         item {
             InfoBanner(
-                title = "Filter List Sources",
-                body = "Optional manual filter updates use reputable public domain lists (Peter Lowe Ad & Tracking Server List, StevenBlack Unified Hosts, AdGuard DNS Filter, and OISD NSFW). All parsing and matching happen strictly on your device."
+                title = "Architecture & Filter Sources",
+                body = "Pipra extends the open-source Injectra architecture. Optional manual filter updates use public domain lists (Peter Lowe Ad & Tracking Server List, StevenBlack Unified Hosts, AdGuard DNS Filter, and OISD NSFW). All rule evaluation stays strictly on your device."
             )
         }
         item { Spacer(Modifier.height(16.dp)) }
     }
+
+    legalDialogTitle?.let { title ->
+        AlertDialog(
+            onDismissRequest = { legalDialogTitle = null },
+            containerColor = PipraColors.Charcoal,
+            title = { Text(title, color = PipraColors.SilverPrimary) },
+            text = {
+                androidx.compose.foundation.layout.Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(340.dp)
+                ) {
+                    androidx.compose.foundation.lazy.LazyColumn {
+                        item {
+                            Text(
+                                text = legalDialogBody,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = PipraColors.SilverMuted
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { legalDialogTitle = null }) {
+                    Text("Close", color = PipraColors.ElectricBlueLight)
+                }
+            }
+        )
+    }
 }
+
+private const val PIPRA_PRIVACY_POLICY = """Pipra Browser Privacy Policy (v3.0)
+
+1. Zero Telemetry & No Accounts
+Pipra does not require registration or sign-in, contains no third-party analytics SDKs, and does not collect or transmit personal browsing history, search queries, bookmarks, or downloaded filenames to the developer.
+
+2. Local-Only Storage
+Browsing history, bookmarks, offline saved web archives, theme preferences, download records, and website blocking rules are stored strictly in private app storage on your device (with Android Auto-Backup disabled).
+
+3. Private Windows (:incognito)
+Private windows run in a separate Android process (:incognito) with an ephemeral cookie jar and FLAG_SECURE screenshot protection. History is not recorded in private mode, and cookies/site storage are wiped when the private window closes. Private browsing does not hide network traffic from websites you visit, your ISP, or network administrators.
+
+4. Network Connections
+Connections occur when you navigate to URLs, perform searches through your selected search engine, download files you request, or manually tap update for optional open-source Ad Blocker / Adult Protection filter lists. Local files opened in Pipra's file viewer are inspected strictly on-device without uploading data.
+
+5. Optional Developer Support
+Tapping "Donate to Developer" opens https://www.supportkori.com/muhammedomor in your browser. Any contribution is completely optional and handled externally by that service.
+
+6. Contact
+Developer: Muhammad Omor
+Email: muhammedomor.dev@gmail.com
+Source: https://github.com/omor-com/Pipra"""
+
+private const val PIPRA_TERMS_AND_CONDITIONS = """Pipra Browser Terms & Conditions (v3.0)
+
+1. Scope of Service
+Pipra is an open-source privacy-focused Android browser developed by Muhammad Omor and provided "as is" without warranties of any kind.
+
+2. User Responsibility
+You are solely responsible for websites visited, files downloaded, and local files opened within Pipra (including extracted archives and APK packages).
+
+3. Website Blocking & Protection Limits
+Locked Website Blocking rules enforce 7–365 day locks within Pipra's Settings interface. As a standard Android application, Pipra cannot block device-level OS actions such as clearing app data, changing the system clock, or uninstalling the app.
+
+4. Local File Viewer & Offline Content
+Untrusted local HTML files are rendered in an isolated WebView without native JavaScript bridges or direct file:// filesystem exposure. Saved offline web archives reflect a local snapshot at capture time and may not preserve dynamic authenticated sessions.
+
+5. Contact
+Developer: Muhammad Omor
+Email: muhammedomor.dev@gmail.com
+Repository: https://github.com/omor-com/Pipra"""
+

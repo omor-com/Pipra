@@ -1,10 +1,18 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.Pipra" parent="Theme.Material3.Dark.NoActionBar">
+    <style name="Theme.Pipra" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/accent</item>
         <item name="colorSecondary">@color/accent_bright</item>
         <item name="android:statusBarColor" tools:targetApi="21">@color/toolbar_dark</item>
         <item name="android:navigationBarColor">@color/toolbar_dark</item>
         <item name="android:windowBackground">@color/toolbar_dark</item>
+    </style>
+
+    <style name="Theme.Pipra.Dialog.Light" parent="Theme.Material3.Light.Dialog.Alert">
+        <item name="colorPrimary">@color/pipra_light_accent</item>
+    </style>
+
+    <style name="Theme.Pipra.Dialog.Dark" parent="Theme.Material3.Dark.Dialog.Alert">
+        <item name="colorPrimary">@color/pipra_dark_accent</item>
     </style>
 
     <style name="ToolIcon">

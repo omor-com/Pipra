@@ -3,6 +3,7 @@ package com.pipra.browser
 import android.app.Application
 import android.os.Build
 import android.webkit.WebView
+import androidx.appcompat.app.AppCompatDelegate
 import java.io.File
 
 /**
@@ -30,6 +31,14 @@ class PipraApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        val store = Store(this)
+        val nightMode = when (store.themeMode) {
+            AppThemeMode.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+            AppThemeMode.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+            AppThemeMode.SYSTEM -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+        }
+        AppCompatDelegate.setDefaultNightMode(nightMode)
+
         if (currentProcessName().endsWith(":$PRIVATE_SUFFIX")) {
             wipePrivateData()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
