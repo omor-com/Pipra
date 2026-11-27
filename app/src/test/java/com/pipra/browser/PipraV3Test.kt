@@ -9,7 +9,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
-import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -78,6 +78,41 @@ class PipraV3JvmTest {
         assertFalse(cleanName.contains(".."))
         assertFalse(cleanName.contains("/"))
         assertTrue(cleanName.endsWith(".html"))
+    }
+
+    @Test
+    fun `offline game engine handles double jump, dive, sugar bonus, and shield absorption`() {
+        val engine = OfflineGameEngine(initialBest = 10)
+        // First tap starts run, next two perform double jump
+        assertTrue(engine.startOrJump().isEmpty())
+        assertEquals(listOf(GameEvent.JUMP), engine.startOrJump())
+        engine.step(0.03f)
+        assertEquals(listOf(GameEvent.DOUBLE_JUMP), engine.startOrJump())
+        assertEquals(2, engine.jumpsUsed)
+        assertTrue(engine.startOrJump().isEmpty()) // capped at double jump
+        assertEquals(listOf(GameEvent.DIVE), engine.fastDive())
+
+        // Sugar pickup adds +25 bonus and updates best score
+        engine.step(0.4f) // settle back to ground
+        while (engine.playerY > 0f) engine.step(0.03f)
+        engine.pickups.clear()
+        engine.pickups.add(GamePickup(xNorm = 0.17f, elevationDp = 18f, kind = PickupKind.SUGAR_DROP))
+        val sugarEvents = engine.step(0.016f)
+        assertTrue(GameEvent.SUGAR_COLLECTED in sugarEvents)
+        assertEquals(25, engine.bonusScore)
+        assertTrue(engine.bestScore >= 25)
+
+        // Leaf shield absorbs one obstacle hit without ending the game
+        engine.pickups.add(GamePickup(xNorm = 0.17f, elevationDp = 18f, kind = PickupKind.LEAF_SHIELD))
+        assertTrue(GameEvent.SHIELD_COLLECTED in engine.step(0.016f))
+        assertTrue(engine.hasShield)
+
+        engine.obstacles.clear()
+        engine.obstacles.add(GameObstacle(xNorm = 0.17f, widthDp = 28f, heightDp = 32f, bottomElevationDp = 0f, kind = ObstacleKind.SPIKY_BURR))
+        val crashEvents = engine.step(0.016f)
+        assertTrue(GameEvent.SHIELD_USED in crashEvents)
+        assertFalse(engine.hasShield)
+        assertFalse(engine.isGameOver)
     }
 }
 
@@ -290,7 +325,7 @@ class SettingsV3UiRobolectricTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("search_engine_list").performScrollToNode(hasTestTag("search_engine_footer"))
-        composeRule.onNodeWithTag("custom_search_input").performTextInput("https://kagi.com/search?q=%s")
+        composeRule.onNodeWithTag("custom_search_input").performTextReplacement("https://kagi.com/search?q=%s")
         composeRule.onNodeWithTag("search_engine_list").performScrollToNode(hasTestTag("search_engine_footer"))
         composeRule.onNodeWithTag("save_custom_search_button").performClick()
         composeRule.waitForIdle()
@@ -304,7 +339,7 @@ class SettingsV3UiRobolectricTest {
         composeRule.onNodeWithTag("settings_item_about").performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("about_pipra_list").performScrollToNode(hasTestTag("about_privacy_policy_btn"))
+        composeRule.onNodeWithTag("about_pipra_list").performScrollToNode(hasTestTag("about_pipra_engine_banner"))
         composeRule.onNodeWithTag("about_privacy_policy_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Pipra Browser Privacy Policy (v3.0)", substring = true).assertIsDisplayed()

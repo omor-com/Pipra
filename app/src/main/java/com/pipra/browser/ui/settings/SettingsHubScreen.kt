@@ -324,9 +324,9 @@ fun SettingSwitchRow(
 }
 
 @Composable
-fun InfoBanner(title: String, body: String) {
+fun InfoBanner(title: String, body: String, modifier: Modifier = Modifier) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = PipraColors.CardSurface),
         border = BorderStroke(1.dp, PipraColors.SilverBorder)

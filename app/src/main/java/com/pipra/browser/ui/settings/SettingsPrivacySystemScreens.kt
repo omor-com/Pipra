@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -306,7 +307,7 @@ fun SearchEngineSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
                 }
             }
         }
-        item { Spacer(Modifier.height(80.dp).testTag("search_engine_footer")) }
+        item { Spacer(Modifier.fillMaxWidth().height(80.dp).testTag("search_engine_footer")) }
     }
 }
 
@@ -509,7 +510,8 @@ fun AboutPipraScreen() {
         item {
             InfoBanner(
                 title = "Engine & Extension Compatibility",
-                body = "Pipra uses Android WebView + androidx.webkit for page rendering, multi-tab browsing, isolated :incognito windows, and saved offline web archives. Because it uses WebView (not GeckoView), Firefox/WebExtension (.xpi) add-ons are not supported; built-in Ad Blocker tiers, 7–365 day Website Locks, Adult Protection, and DevTools CSS/JS Insert Rules are supported natively."
+                body = "Pipra uses Android WebView + androidx.webkit for page rendering, multi-tab browsing, isolated :incognito windows, and saved offline web archives. Because it uses WebView (not GeckoView), Firefox/WebExtension (.xpi) add-ons are not supported; built-in Ad Blocker tiers, 7–365 day Website Locks, Adult Protection, and DevTools CSS/JS Insert Rules are supported natively.",
+                modifier = Modifier.testTag("about_pipra_engine_banner")
             )
         }
         item {
@@ -518,7 +520,7 @@ fun AboutPipraScreen() {
                 body = "Pipra extends the open-source Injectra architecture. Optional manual filter updates use public domain lists (Peter Lowe Ad & Tracking Server List, StevenBlack Unified Hosts, AdGuard DNS Filter, and OISD NSFW). All rule evaluation stays strictly on your device."
             )
         }
-        item { Spacer(Modifier.height(80.dp).testTag("about_pipra_footer")) }
+        item { Spacer(Modifier.fillMaxWidth().height(80.dp).testTag("about_pipra_footer")) }
     }
 
     legalDialogTitle?.let { title ->
@@ -530,7 +532,7 @@ fun AboutPipraScreen() {
                 androidx.compose.foundation.layout.Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(340.dp)
+                        .heightIn(max = 260.dp)
                 ) {
                     androidx.compose.foundation.lazy.LazyColumn {
                         item {

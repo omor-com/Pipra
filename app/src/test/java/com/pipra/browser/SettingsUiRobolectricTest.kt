@@ -9,7 +9,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
-import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -67,7 +67,7 @@ class SettingsUiRobolectricTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("website_blocking_list").performScrollToNode(hasTestTag("block_host_input"))
-        composeRule.onNodeWithTag("block_host_input").performTextInput("m.youtube.com")
+        composeRule.onNodeWithTag("block_host_input").performTextReplacement("m.youtube.com")
         composeRule.onNodeWithTag("website_blocking_list").performScrollToNode(hasTestTag("website_blocking_after_form"))
         composeRule.onNodeWithTag("block_add_rule_button").performClick()
         composeRule.waitForIdle()
