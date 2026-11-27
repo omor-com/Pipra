@@ -216,7 +216,10 @@ fun SearchEngineSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
     var customInput by remember(state.customSearchUrl) { mutableStateOf(state.customSearchUrl) }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+            .testTag("search_engine_list"),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item { Spacer(Modifier.height(4.dp)) }
@@ -397,7 +400,10 @@ fun AboutPipraScreen() {
     var legalDialogBody by remember { mutableStateOf("") }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+            .testTag("about_pipra_list"),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item { Spacer(Modifier.height(4.dp)) }

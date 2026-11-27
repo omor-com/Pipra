@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -153,6 +155,7 @@ fun SettingsHubScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AppearanceSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
     var homepageInput by remember(state.homepage) { mutableStateOf(state.homepage) }
@@ -173,9 +176,10 @@ fun AppearanceSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
                     color = PipraColors.SilverMuted
                 )
                 Spacer(Modifier.height(10.dp))
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     com.pipra.browser.AppThemeMode.entries.forEach { mode ->
                         val selected = state.themeMode == mode

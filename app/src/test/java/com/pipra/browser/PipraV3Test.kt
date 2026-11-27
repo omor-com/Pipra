@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -19,6 +20,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.ExternalResource
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -86,6 +88,7 @@ class PipraV3RobolectricTest {
     private lateinit var context: Context
 
     @Before
+    @After
     fun clean() {
         context = ApplicationProvider.getApplicationContext()
         context.getSharedPreferences("pipra", Context.MODE_PRIVATE).edit().clear().commit()
@@ -209,25 +212,39 @@ class PipraV3RobolectricTest {
 
     @Test
     fun `home html and network error html render light mode and offline game action`() {
-        val home = BlockedPageHtml.pipraHomeHtml(
-            activeEngine = "Google",
-            availableEngines = Store.SEARCH_ENGINES.keys.toList(),
-            bookmarks = listOf(Bookmark("https://example.org", "Example", "/tmp/a.mht", 1234L)),
-            isDark = false
-        )
-        assertTrue(home.contains("Search Google"))
-        assertTrue(home.contains("#F4F6F9"))
-        assertTrue(home.contains("Offline"))
+        val offlineFile = File.createTempFile("offline_example", ".mht", context.cacheDir)
+        try {
+            val home = BlockedPageHtml.pipraHomeHtml(
+                activeEngine = "Google",
+                availableEngines = Store.SEARCH_ENGINES.keys.toList(),
+                bookmarks = listOf(Bookmark("https://example.org", "Example", offlineFile.absolutePath, 1234L)),
+                isDark = false
+            )
+            assertTrue(home.contains("Search Google"))
+            assertTrue(home.contains("#F4F6F9"))
+            assertTrue(home.contains("Offline"))
 
-        val offlinePage = BlockedPageHtml.networkErrorHtml(
-            failedUrl = "https://example.org",
-            errorDescription = "ERR_INTERNET_DISCONNECTED",
-            isOffline = true,
-            isDark = false
-        )
-        assertTrue(offlinePage.contains("You're Offline"))
-        assertTrue(offlinePage.contains("pipra://game"))
-        assertTrue(offlinePage.contains("Play Ant Dash"))
+            val darkHome = BlockedPageHtml.pipraHomeHtml(
+                activeEngine = "DuckDuckGo",
+                availableEngines = Store.SEARCH_ENGINES.keys.toList(),
+                bookmarks = emptyList(),
+                isDark = true
+            )
+            assertTrue(darkHome.contains("Search DuckDuckGo"))
+            assertTrue(darkHome.contains("#0B0C0E"))
+
+            val offlinePage = BlockedPageHtml.networkErrorHtml(
+                failedUrl = "https://example.org",
+                errorDescription = "ERR_INTERNET_DISCONNECTED",
+                isOffline = true,
+                isDark = false
+            )
+            assertTrue(offlinePage.contains("You're Offline"))
+            assertTrue(offlinePage.contains("pipra://game"))
+            assertTrue(offlinePage.contains("Play Ant Dash"))
+        } finally {
+            offlineFile.delete()
+        }
     }
 }
 
@@ -235,15 +252,22 @@ class PipraV3RobolectricTest {
 @Config(sdk = [36])
 class SettingsV3UiRobolectricTest {
 
-    @get:Rule
-    val composeRule = createAndroidComposeRule<SettingsActivity>()
+    @get:Rule(order = 0)
+    val cleanPrefsRule = object : ExternalResource() {
+        private fun wipe() {
+            val ctx = ApplicationProvider.getApplicationContext<Context>()
+            ctx.getSharedPreferences("pipra", Context.MODE_PRIVATE).edit().clear().commit()
+            File(ctx.filesDir, "pipra_policy.json").delete()
+            File(ctx.filesDir, "pipra_blocked_sites.json").delete()
+            File(ctx.filesDir, "pipra_rule_hmac.key").delete()
+        }
 
-    @Before
-    fun resetPrefs() {
-        val ctx = ApplicationProvider.getApplicationContext<Context>()
-        ctx.getSharedPreferences("pipra", Context.MODE_PRIVATE).edit().clear().commit()
-        File(ctx.filesDir, "pipra_policy.json").delete()
+        override fun before() = wipe()
+        override fun after() = wipe()
     }
+
+    @get:Rule(order = 1)
+    val composeRule = createAndroidComposeRule<SettingsActivity>()
 
     @Test
     fun `appearance theme switch and legal docs in about screen work without login`() {
@@ -252,6 +276,7 @@ class SettingsV3UiRobolectricTest {
         composeRule.onNodeWithTag("settings_item_appearance").performClick()
         composeRule.waitForIdle()
 
+        composeRule.onNodeWithTag("appearance_list").performScrollToNode(hasTestTag("theme_mode_dark"))
         composeRule.onNodeWithTag("theme_mode_dark").performClick()
         composeRule.waitForIdle()
         val ctx = ApplicationProvider.getApplicationContext<Context>()
@@ -263,10 +288,14 @@ class SettingsV3UiRobolectricTest {
         composeRule.onNodeWithTag("settings_hub_list").performScrollToNode(hasTestTag("settings_item_search_engine"))
         composeRule.onNodeWithTag("settings_item_search_engine").performClick()
         composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("search_engine_list").performScrollToNode(hasTestTag("custom_search_input"))
         composeRule.onNodeWithTag("custom_search_input").performTextInput("https://kagi.com/search?q=%s")
+        composeRule.onNodeWithTag("search_engine_list").performScrollToNode(hasTestTag("save_custom_search_button"))
         composeRule.onNodeWithTag("save_custom_search_button").performClick()
         composeRule.waitForIdle()
         assertEquals(Store.CUSTOM_SEARCH_ENGINE, Store(ctx).searchEngine)
+        assertEquals("https://kagi.com/search?q=%s", Store(ctx).customSearchUrl)
 
         composeRule.onNodeWithTag("settings_back_button").performClick()
         composeRule.waitForIdle()
@@ -275,6 +304,7 @@ class SettingsV3UiRobolectricTest {
         composeRule.onNodeWithTag("settings_item_about").performClick()
         composeRule.waitForIdle()
 
+        composeRule.onNodeWithTag("about_pipra_list").performScrollToNode(hasTestTag("about_privacy_policy_btn"))
         composeRule.onNodeWithTag("about_privacy_policy_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Pipra Browser Privacy Policy (v3.0)", substring = true).assertIsDisplayed()

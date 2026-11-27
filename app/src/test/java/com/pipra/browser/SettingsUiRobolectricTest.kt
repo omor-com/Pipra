@@ -12,9 +12,9 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.ExternalResource
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -24,21 +24,26 @@ import java.io.File
 @Config(sdk = [36])
 class SettingsUiRobolectricTest {
 
-    @get:Rule
-    val composeRule = createAndroidComposeRule<SettingsActivity>()
+    @get:Rule(order = 0)
+    val cleanPrefsRule = object : ExternalResource() {
+        private fun wipe() {
+            val ctx = ApplicationProvider.getApplicationContext<Context>()
+            ctx.getSharedPreferences("pipra", Context.MODE_PRIVATE).edit().clear().commit()
+            File(ctx.filesDir, "pipra_blocked_sites.json").delete()
+            File(ctx.filesDir, "pipra_rule_hmac.key").delete()
+            File(ctx.filesDir, "pipra_policy.json").delete()
+        }
 
-    private lateinit var context: Context
-
-    @Before
-    fun cleanState() {
-        context = ApplicationProvider.getApplicationContext()
-        File(context.filesDir, "pipra_blocked_sites.json").delete()
-        File(context.filesDir, "pipra_rule_hmac.key").delete()
-        File(context.filesDir, "pipra_policy.json").delete()
+        override fun before() = wipe()
+        override fun after() = wipe()
     }
+
+    @get:Rule(order = 1)
+    val composeRule = createAndroidComposeRule<SettingsActivity>()
 
     @Test
     fun `settings hub shows all 10 sections and locks newly added website rule in UI`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
         composeRule.waitForIdle()
         listOf(
             "settings_item_appearance",
@@ -61,7 +66,9 @@ class SettingsUiRobolectricTest {
         composeRule.onNodeWithTag("settings_item_website_blocking").performClick()
         composeRule.waitForIdle()
 
+        composeRule.onNodeWithTag("website_blocking_list").performScrollToNode(hasTestTag("block_host_input"))
         composeRule.onNodeWithTag("block_host_input").performTextInput("m.youtube.com")
+        composeRule.onNodeWithTag("website_blocking_list").performScrollToNode(hasTestTag("block_add_rule_button"))
         composeRule.onNodeWithTag("block_add_rule_button").performClick()
         composeRule.waitForIdle()
 
