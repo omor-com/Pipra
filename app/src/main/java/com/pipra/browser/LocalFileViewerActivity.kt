@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.webkit.CookieManager
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -490,6 +491,12 @@ private fun HtmlViewerPane(
                                 }
                                 return null
                             }
+
+                            @androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
+                            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                                Toast.makeText(ctx, "Page renderer stopped; tap Back and reopen if blank", Toast.LENGTH_SHORT).show()
+                                return true
+                            }
                         }
                     }
                 },
@@ -549,6 +556,12 @@ private fun WebArchiveViewerPane(
                             onOpenLinkInBrowser(u)
                             return true
                         }
+                        return true
+                    }
+
+                    @androidx.annotation.RequiresApi(Build.VERSION_CODES.O)
+                    override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                        Toast.makeText(ctx, "Archive renderer stopped; reopen page if blank", Toast.LENGTH_SHORT).show()
                         return true
                     }
                 }

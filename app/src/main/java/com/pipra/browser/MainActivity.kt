@@ -27,6 +27,7 @@ import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
 import android.webkit.PermissionRequest
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
@@ -642,6 +643,25 @@ open class MainActivity : AppCompatActivity() {
                 // Never bypass TLS certificate validation.
                 handler.cancel()
                 toast("Connection refused: invalid TLS certificate")
+            }
+
+            @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.O)
+            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                val idx = tabs.indexOfFirst { it.webView === view }
+                if (idx >= 0) {
+                    val dead = tabs.removeAt(idx)
+                    val recoverUrl = dead.currentUrl ?: homeUrl
+                    val wasDesktop = dead.desktop
+                    webContainer.removeView(dead.webView)
+                    tabBar.removeView(dead.chip)
+                    try { dead.webView.destroy() } catch (_: Exception) {}
+                    if (currentIndex >= tabs.size) currentIndex = tabs.size - 1
+                    createTab(recoverUrl, desktopOverride = wasDesktop)
+                    toast("Recovered page renderer")
+                } else {
+                    try { view.destroy() } catch (_: Exception) {}
+                }
+                return true
             }
         }
 
