@@ -69,6 +69,21 @@ android {
     unitTests {
       isIncludeAndroidResources = true
       all {
+        it.systemProperty(
+            "robolectric.dependency.repo.url",
+            System.getProperty("robolectric.dependency.repo.url")
+                ?: "https://repo.maven.apache.org/maven2/"
+        )
+        it.systemProperty(
+            "robolectric.dependency.repo.id",
+            System.getProperty("robolectric.dependency.repo.id") ?: "central"
+        )
+        System.getProperty("robolectric.dependency.dir")?.takeIf { d -> d.isNotBlank() }?.let { dir ->
+          it.systemProperty("robolectric.dependency.dir", dir)
+        }
+        System.getProperty("robolectric.offline")?.takeIf { o -> o.isNotBlank() }?.let { offline ->
+          it.systemProperty("robolectric.offline", offline)
+        }
         it.testLogging {
           events("passed", "skipped", "failed")
           exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

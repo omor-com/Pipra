@@ -40,8 +40,65 @@ jobs:
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           cp debug.keystore app/debug.keystore
 
+      - name: Cache Robolectric runtime SDK artifact
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository/org/robolectric
+            .robolectric-cache
+          key: ${{ runner.os }}-robolectric-sdk36-16-robolectric-13921718-i7
+
+      - name: Pre-fetch Robolectric SDK 36 artifact with bounded retry
+        run: |
+          mkdir -p .robolectric-cache
+          JAR_NAME="android-all-instrumented-16-robolectric-13921718-i7.jar"
+          TARGET=".robolectric-cache/${JAR_NAME}"
+          REL_PATH="org/robolectric/android-all-instrumented/16-robolectric-13921718-i7/${JAR_NAME}"
+          M2_CACHED="${HOME}/.m2/repository/${REL_PATH}"
+
+          if [ ! -f "$TARGET" ] && [ -f "$M2_CACHED" ] && jar tf "$M2_CACHED" >/dev/null 2>&1; then
+            cp "$M2_CACHED" "$TARGET"
+          fi
+
+          if [ ! -f "$TARGET" ] || ! jar tf "$TARGET" >/dev/null 2>&1; then
+            rm -f "$TARGET"
+            TMP_JAR="${TARGET}.tmp"
+            DELAYS=(5 15 30)
+            URLS=(
+              "https://repo.maven.apache.org/maven2/${REL_PATH}"
+              "https://repo1.maven.org/maven2/${REL_PATH}"
+            )
+            for idx in "${!URLS[@]}"; do
+              URL="${URLS[$idx]}"
+              for attempt in 1 2 3; do
+                echo "Downloading Robolectric SDK 36 from ${URL} (attempt ${attempt}/3)..."
+                if curl -fSL --connect-timeout 20 --max-time 180 -A "PipraCI/1.0" -o "$TMP_JAR" "$URL" && jar tf "$TMP_JAR" >/dev/null 2>&1; then
+                  mv "$TMP_JAR" "$TARGET"
+                  echo "Successfully cached ${JAR_NAME}."
+                  break 2
+                fi
+                rm -f "$TMP_JAR"
+                SLEEP_SECS="${DELAYS[$((attempt - 1))]}"
+                echo "Download attempt ${attempt} failed; backing off ${SLEEP_SECS}s..."
+                sleep "$SLEEP_SECS"
+              done
+            done
+          fi
+
+          if [ -f "$TARGET" ] && jar tf "$TARGET" >/dev/null 2>&1; then
+            echo "ROBOLECTRIC_CACHE_READY=true" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Could not pre-fetch ${JAR_NAME}; :app:testDebugUnitTest will fall back to Robolectric MavenDependencyResolver."
+            echo "ROBOLECTRIC_CACHE_READY=false" >> "$GITHUB_ENV"
+          fi
+
       - name: Run unit and Robolectric tests
-        run: gradle :app:testDebugUnitTest --no-daemon
+        run: |
+          if [ "${ROBOLECTRIC_CACHE_READY:-false}" = "true" ]; then
+            gradle :app:testDebugUnitTest -Drobolectric.dependency.dir="${GITHUB_WORKSPACE}/.robolectric-cache" -Drobolectric.offline=true --no-daemon
+          else
+            gradle :app:testDebugUnitTest --no-daemon
+          fi
 
       - name: Upload unit test report on failure
         if: failure()
