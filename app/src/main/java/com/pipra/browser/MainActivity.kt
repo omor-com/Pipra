@@ -99,6 +99,7 @@ open class MainActivity : AppCompatActivity() {
     private val closedTabs = ArrayDeque<ClosedTabRecord>()
     private var currentIndex = -1
     private var isFullscreen = false
+    private var pausedOnce = false
 
     private lateinit var store: Store
     private lateinit var dev: DevStore
@@ -307,9 +308,14 @@ open class MainActivity : AppCompatActivity() {
         createTab(incomingUrl(intent) ?: homeUrl)
     }
 
+    override fun onPause() {
+        pausedOnce = true
+        super.onPause()
+    }
+
     override fun onResume() {
         super.onResume()
-        if (::store.isInitialized) {
+        if (pausedOnce && ::store.isInitialized) {
             tabStrip.visibility = if (store.showTabStrip) View.VISIBLE else View.GONE
             if (!isPrivate) applyThemeLook()
             applySettingsToAllTabs()
@@ -579,7 +585,14 @@ open class MainActivity : AppCompatActivity() {
 
         tabs.add(tab)
         tabBar.addView(tab.chip)
-        switchTo(tabs.size - 1)
+        if (openSession) {
+            switchTo(tabs.size - 1)
+        } else {
+            webContainer.post {
+                val idx = tabs.indexOf(tab)
+                if (idx >= 0) switchTo(idx)
+            }
+        }
 
         if (url != null) navigate(tab, url)
         return tab
@@ -1734,7 +1747,8 @@ open class MainActivity : AppCompatActivity() {
     private fun rippleBg(): android.graphics.drawable.Drawable {
         val outValue = TypedValue()
         theme.resolveAttribute(android.R.attr.selectableItemBackground, outValue, true)
-        return getDrawable(outValue.resourceId) ?: android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
+        return androidx.appcompat.content.res.AppCompatResources.getDrawable(this, outValue.resourceId)
+            ?: android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
     }
 
     internal fun simpleWatcher(onChange: (String) -> Unit): TextWatcher = object : TextWatcher {
