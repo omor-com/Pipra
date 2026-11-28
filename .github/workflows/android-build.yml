@@ -63,29 +63,36 @@ jobs:
           if [ ! -f "$TARGET" ] || ! jar tf "$TARGET" >/dev/null 2>&1; then
             rm -f "$TARGET"
             TMP_JAR="${TARGET}.tmp"
-            DELAYS=(5 15 30)
+            DELAYS=(2 5 10)
             URLS=(
               "https://repo.maven.apache.org/maven2/${REL_PATH}"
+              "https://maven-central.storage-download.googleapis.com/maven2/${REL_PATH}"
               "https://repo1.maven.org/maven2/${REL_PATH}"
             )
-            for idx in "${!URLS[@]}"; do
-              URL="${URLS[$idx]}"
-              for attempt in 1 2 3; do
+            for attempt in 1 2 3; do
+              for idx in "${!URLS[@]}"; do
+                URL="${URLS[$idx]}"
                 echo "Downloading Robolectric SDK 36 from ${URL} (attempt ${attempt}/3)..."
                 if curl -fSL --connect-timeout 20 --max-time 180 -A "PipraCI/1.0" -o "$TMP_JAR" "$URL" && jar tf "$TMP_JAR" >/dev/null 2>&1; then
                   mv "$TMP_JAR" "$TARGET"
-                  echo "Successfully cached ${JAR_NAME}."
+                  mkdir -p "$(dirname "$M2_CACHED")"
+                  cp -f "$TARGET" "$M2_CACHED"
+                  echo "Successfully cached ${JAR_NAME} from ${URL}."
                   break 2
                 fi
                 rm -f "$TMP_JAR"
-                SLEEP_SECS="${DELAYS[$((attempt - 1))]}"
-                echo "Download attempt ${attempt} failed; backing off ${SLEEP_SECS}s..."
-                sleep "$SLEEP_SECS"
               done
+              SLEEP_SECS="${DELAYS[$((attempt - 1))]}"
+              echo "All mirrors failed on attempt ${attempt}; backing off ${SLEEP_SECS}s..."
+              sleep "$SLEEP_SECS"
             done
           fi
 
           if [ -f "$TARGET" ] && jar tf "$TARGET" >/dev/null 2>&1; then
+            if [ ! -f "$M2_CACHED" ]; then
+              mkdir -p "$(dirname "$M2_CACHED")"
+              cp -f "$TARGET" "$M2_CACHED"
+            fi
             echo "ROBOLECTRIC_CACHE_READY=true" >> "$GITHUB_ENV"
           else
             echo "::warning::Could not pre-fetch ${JAR_NAME}; :app:testDebugUnitTest will fall back to Robolectric MavenDependencyResolver."

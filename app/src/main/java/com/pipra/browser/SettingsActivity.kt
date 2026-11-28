@@ -48,7 +48,14 @@ import com.pipra.browser.ui.theme.PipraTheme
 
 class SettingsActivity : ComponentActivity() {
 
-    private val vm: SettingsViewModel by viewModels()
+    private val vm: SettingsViewModel by viewModels {
+        object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return SettingsViewModel(application) as T
+            }
+        }
+    }
 
     companion object {
         const val EXTRA_SECTION = "section"
