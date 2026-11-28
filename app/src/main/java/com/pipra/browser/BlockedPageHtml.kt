@@ -257,11 +257,88 @@ object BlockedPageHtml {
         """.trimIndent()
     }
 
+    fun focusBlockedHtml(
+        blockedHost: String,
+        matchLabel: String,
+        matchDetail: String,
+        isDark: Boolean = false
+    ): String {
+        val safeHost = Codec.htmlEncode(blockedHost)
+        val safeLabel = Codec.htmlEncode(matchLabel)
+        val safeDetail = Codec.htmlEncode(matchDetail)
+        val bg = if (isDark) "#0B0C0E" else "#F4F6F9"
+        val card = if (isDark) "#14161A" else "#FFFFFF"
+        val border = if (isDark) "#2E333D" else "#D8DFE8"
+        val text = if (isDark) "#E6E8EC" else "#111827"
+        val heading = if (isDark) "#FFFFFF" else "#0F172A"
+        val muted = if (isDark) "#9CA3AF" else "#4B5563"
+        val accent = if (isDark) "#3B82F6" else "#2563EB"
+        val accentText = if (isDark) "#60A5FA" else "#1D4ED8"
+        val secBg = if (isDark) "#22262E" else "#EEF2F6"
+
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width,initial-scale=1">
+              <title>Focus Mode · Pipra</title>
+              <style>
+                body {
+                  margin: 0; padding: 28px 20px;
+                  background: $bg; color: $text;
+                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                  line-height: 1.55;
+                }
+                .card {
+                  max-width: 520px; margin: 28px auto;
+                  background: $card; border: 1px solid $border;
+                  border-radius: 16px; padding: 24px;
+                  box-shadow: 0 8px 24px rgba(15,23,42,${if (isDark) "0.35" else "0.06"});
+                }
+                .pill {
+                  display: inline-block; padding: 5px 11px;
+                  border-radius: 999px; font-size: 11px; font-weight: 700;
+                  letter-spacing: 0.06em; text-transform: uppercase;
+                  background: rgba(37,99,235,0.12); color: $accentText;
+                  border: 1px solid rgba(37,99,235,0.32);
+                }
+                h1 { font-size: 22px; margin: 16px 0 8px; color: $heading; }
+                .host { font-family: monospace; font-size: 15px; color: $muted; word-break: break-all; }
+                p { font-size: 14px; color: $muted; margin-top: 12px; }
+                .actions { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+                button {
+                  border: 0; border-radius: 10px; padding: 11px 16px;
+                  font-size: 14px; font-weight: 600; cursor: pointer;
+                }
+                .primary { background: $accent; color: #FFFFFF; }
+                .secondary { background: $secBg; color: $text; border: 1px solid $border; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <span class="pill">$safeLabel</span>
+                <h1>Focus Window Active</h1>
+                <div class="host">$safeHost</div>
+                <p>Blocked by your Focus Schedule ($safeDetail). Stay focused — you can manage Focus rules or Pomodoro sessions in Pipra Focus Settings.</p>
+                <div class="actions">
+                  <button class="primary" onclick="location.href='pipra://home'">Pipra Home</button>
+                  <button class="secondary" onclick="location.href='pipra://focus'">Focus Settings</button>
+                </div>
+              </div>
+            </body>
+            </html>
+        """.trimIndent()
+    }
+
     fun pipraHomeHtml(
         activeEngine: String,
         availableEngines: List<String>,
         bookmarks: List<Bookmark>,
-        isDark: Boolean = false
+        isDark: Boolean = false,
+        privacyTotalBlocked: Long = 0L,
+        httpsUpgrades: Long = 0L,
+        activeExtensionCount: Int = 0
     ): String {
         val bg = if (isDark) "#0B0C0E" else "#F4F6F9"
         val bgGrad = if (isDark) "radial-gradient(ellipse at 50% 25%, #121826 0%, #0B0C0E 68%)"
@@ -455,6 +532,10 @@ object BlockedPageHtml {
                 </div>
                 <h1>Pipra</h1>
                 <div class="sub">Fast &amp; Private Mobile Browsing</div>
+                <a href="pipra://stats" style="margin-top:10px;display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:$panel;border:1px solid $border;color:$accentSoft;font-size:12px;font-weight:600;text-decoration:none;">
+                  <span>🛡 $privacyTotalBlocked blocked · $httpsUpgrades HTTPS</span>
+                  ${if (activeExtensionCount > 0) "<span>· $activeExtensionCount ext</span>" else ""}
+                </a>
               </div>
 
               <div class="search-wrap">
@@ -488,6 +569,22 @@ object BlockedPageHtml {
                 <a class="qbtn" href="pipra://downloads">
                   <span class="qicon">↓</span>
                   <span>Downloads</span>
+                </a>
+                <a class="qbtn" href="pipra://extensions">
+                  <span class="qicon">🧩</span>
+                  <span>Extensions</span>
+                </a>
+                <a class="qbtn" href="pipra://focus">
+                  <span class="qicon">⏱</span>
+                  <span>Focus</span>
+                </a>
+                <a class="qbtn" href="pipra://stats">
+                  <span class="qicon">🛡</span>
+                  <span>Shields</span>
+                </a>
+                <a class="qbtn" href="pipra://game">
+                  <span class="qicon">🐜</span>
+                  <span>Ant Dash</span>
                 </a>
                 <a class="qbtn" href="pipra://settings">
                   <span class="qicon">⚙</span>

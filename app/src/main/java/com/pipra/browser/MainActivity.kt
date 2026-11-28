@@ -1,15 +1,21 @@
 package com.pipra.browser
 
+import android.Manifest
+import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.drawable.GradientDrawable
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Rational
 import android.util.TypedValue
 import android.view.ContextThemeWrapper
 import android.view.Gravity
@@ -24,6 +30,7 @@ import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ListView
@@ -51,11 +58,13 @@ import java.util.Date
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.absoluteValue
 import org.mozilla.geckoview.AllowOrDeny
+import org.mozilla.geckoview.ContentBlocking
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoSessionSettings
 import org.mozilla.geckoview.GeckoView
+import org.mozilla.geckoview.MediaSession
 import org.mozilla.geckoview.WebRequestError
 import org.mozilla.geckoview.WebResponse
 
@@ -84,6 +93,10 @@ open class MainActivity : AppCompatActivity() {
         var historyCurrentIndex: Int = 0
         val historyEntries: MutableList<Pair<String, String>> = mutableListOf()
         val blocked = AtomicInteger(0)
+        var groupName: String = ""
+        var groupColorHex: Int = 0
+        var hasActiveMedia: Boolean = false
+        var isMediaPlaying: Boolean = false
         @Volatile var currentUrl: String? = null
         @Volatile var lastFailedUrl: String? = null
         @Volatile var internalRoute: String? = null
@@ -99,7 +112,12 @@ open class MainActivity : AppCompatActivity() {
     private val closedTabs = ArrayDeque<ClosedTabRecord>()
     private var currentIndex = -1
     private var isFullscreen = false
+    private var isInPip = false
+    private var activeMediaPlaying = false
+    private var lastScrollY = 0
+    private var chromeHiddenByScroll = false
     private var pausedOnce = false
+    private var unlockedForSession = false
 
     private lateinit var store: Store
     private lateinit var dev: DevStore
@@ -107,6 +125,10 @@ open class MainActivity : AppCompatActivity() {
     private lateinit var adBlocker: AdBlockerEngine
     private lateinit var adultBlocker: AdultBlockerEngine
     private lateinit var ruleEngine: RuleEngine
+    private lateinit var privacyStats: PrivacyStatsManager
+    private lateinit var focusSchedule: FocusScheduleManager
+    private lateinit var sitePermissions: SitePermissionManager
+    private lateinit var appLock: AppLockManager
     private lateinit var cookieDialogs: BrowserCookieDialogs
     private lateinit var devDialogs: BrowserDevDialogs
     private lateinit var geckoRuntime: GeckoRuntime
@@ -122,6 +144,8 @@ open class MainActivity : AppCompatActivity() {
     private lateinit var btnForward: ImageButton
     private lateinit var btnHome: ImageButton
     private lateinit var btnReload: ImageButton
+    private lateinit var btnTabs: View
+    private lateinit var txtTabsCount: TextView
     private lateinit var btnMenu: ImageButton
     private lateinit var btnNewTab: ImageButton
     private lateinit var progress: ProgressBar
@@ -134,6 +158,16 @@ open class MainActivity : AppCompatActivity() {
 
     private val httpAllowed = mutableSetOf<String>()
     private val upgradedHosts = mutableSetOf<String>()
+
+    private var pendingAndroidPermCallback: GeckoSession.PermissionDelegate.Callback? = null
+    private val androidPermLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+            val cb = pendingAndroidPermCallback
+            pendingAndroidPermCallback = null
+            if (cb != null) {
+                if (grants.values.any { it }) cb.grant() else cb.reject()
+            }
+        }
 
     private var pendingFilePromptResult: GeckoResult<GeckoSession.PromptDelegate.PromptResponse>? = null
     private var pendingFilePrompt: GeckoSession.PromptDelegate.FilePrompt? = null
@@ -199,8 +233,37 @@ open class MainActivity : AppCompatActivity() {
         adBlocker = AdBlockerEngine(this)
         adultBlocker = AdultBlockerEngine(this)
         ruleEngine = RuleEngine(dev) { url -> isBlockedDestination(url) }
+        privacyStats = PrivacyStatsManager(this)
+        focusSchedule = FocusScheduleManager(this)
+        sitePermissions = SitePermissionManager(this)
+        appLock = AppLockManager(this)
         PipraDownloadManager.ensureInitialized(this)
         geckoRuntime = PipraGeckoRuntime.getOrCreate(this, store)
+        PipraExtensionManager.attachRuntime(
+            runtime = geckoRuntime,
+            onInstallPrompt = { ext, perms, origins, cb ->
+                runOnUiThread {
+                    BrowserV4Dialogs.showExtensionInstallConsentDialog(
+                        activity = this,
+                        themedCtx = themedContext(),
+                        extension = ext,
+                        permissions = perms,
+                        origins = origins,
+                        onDecision = cb
+                    )
+                }
+            },
+            onPopupSession = { ext, popupSession ->
+                runOnUiThread {
+                    BrowserV4Dialogs.showExtensionPopupDialog(
+                        activity = this,
+                        themedCtx = themedContext(),
+                        extension = ext,
+                        popupSession = popupSession
+                    )
+                }
+            }
+        )
 
         cookieDialogs = BrowserCookieDialogs(
             activity = this,
@@ -248,6 +311,8 @@ open class MainActivity : AppCompatActivity() {
         btnForward = findViewById(R.id.btnForward)
         btnHome = findViewById(R.id.btnHome)
         btnReload = findViewById(R.id.btnReload)
+        btnTabs = findViewById(R.id.btnTabs)
+        txtTabsCount = findViewById(R.id.txtTabsCount)
         btnMenu = findViewById(R.id.btnMenu)
         btnNewTab = findViewById(R.id.btnNewTab)
         findPrev = findViewById(R.id.findPrev)
@@ -264,6 +329,7 @@ open class MainActivity : AppCompatActivity() {
 
         if (isPrivate) applyPrivateLook() else applyThemeLook()
         tabStrip.visibility = if (store.showTabStrip) View.VISIBLE else View.GONE
+        applyToolbarPosition()
 
         CookieManager.getInstance().setAcceptCookie(true)
 
@@ -273,6 +339,7 @@ open class MainActivity : AppCompatActivity() {
             else tab.session.reload()
         }
         btnNewTab.setOnClickListener { createTab(homeUrl) }
+        btnTabs.setOnClickListener { showTabSwitcher() }
         btnMenu.setOnClickListener { showMenu() }
         btnHome.setOnClickListener { current()?.let { loadInto(it, homeUrl) } }
 
@@ -306,6 +373,25 @@ open class MainActivity : AppCompatActivity() {
         })
 
         createTab(incomingUrl(intent) ?: homeUrl)
+        enforceAppLockIfNeeded()
+    }
+
+    private fun enforceAppLockIfNeeded() {
+        val scope = if (isPrivate) LockScope.PRIVATE_WINDOW else LockScope.LAUNCH
+        if (!unlockedForSession && appLock.isLockRequired(scope)) {
+            webContainer.visibility = View.INVISIBLE
+            BrowserV4Dialogs.showAppLockGateDialog(
+                activity = this,
+                themedCtx = themedContext(),
+                appLock = appLock,
+                scopeTitle = if (isPrivate) "Unlock Private Window" else "Unlock Pipra Browser",
+                onUnlocked = {
+                    unlockedForSession = true
+                    webContainer.visibility = View.VISIBLE
+                },
+                onCancel = { closeWindow() }
+            )
+        }
     }
 
     override fun onPause() {
@@ -317,6 +403,8 @@ open class MainActivity : AppCompatActivity() {
         super.onResume()
         if (pausedOnce && ::store.isInitialized) {
             tabStrip.visibility = if (store.showTabStrip) View.VISIBLE else View.GONE
+            applyToolbarPosition()
+            restoreToolbarVisibility()
             if (!isPrivate) applyThemeLook()
             applySettingsToAllTabs()
             tabs.forEach { tab ->
@@ -330,6 +418,48 @@ open class MainActivity : AppCompatActivity() {
                     setUrlBarText("")
                 }
             }
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if ((activeMediaPlaying || isFullscreen) && Build.VERSION.SDK_INT >= 26 && !isInPictureInPictureMode) {
+            enterPipMode(silent = true)
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        isInPip = isInPictureInPictureMode
+        if (isInPictureInPictureMode) {
+            tabStrip.visibility = View.GONE
+            toolbarRow.visibility = View.GONE
+            findBar.visibility = View.GONE
+            progress.visibility = View.GONE
+        } else {
+            tabStrip.visibility = if (store.showTabStrip) View.VISIBLE else View.GONE
+            toolbarRow.visibility = View.VISIBLE
+            chromeHiddenByScroll = false
+        }
+    }
+
+    private fun enterPipMode(silent: Boolean = false) {
+        if (Build.VERSION.SDK_INT < 26 ||
+            !packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        ) {
+            if (!silent) toast("Picture-in-Picture is not supported on this device")
+            return
+        }
+        try {
+            val params = PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(16, 9))
+                .build()
+            enterPictureInPictureMode(params)
+        } catch (_: Exception) {
+            if (!silent) toast("Could not enter Picture-in-Picture mode")
         }
     }
 
@@ -448,6 +578,7 @@ open class MainActivity : AppCompatActivity() {
         listOf(btnBack, btnForward, btnHome, btnReload, btnMenu, btnNewTab, findPrev, findNext, findClose).forEach {
             it.imageTintList = iconTint
         }
+        styleTabCounterBadge(text, cardInactive)
 
         val controller = WindowCompat.getInsetsController(window, window.decorView)
         controller.isAppearanceLightStatusBars = !dark
@@ -484,11 +615,67 @@ open class MainActivity : AppCompatActivity() {
         listOf(btnBack, btnForward, btnHome, btnReload, btnMenu, btnNewTab, findPrev, findNext, findClose).forEach {
             it.imageTintList = iconTint
         }
+        styleTabCounterBadge(text, getColor(R.color.pipra_dark_tab_inactive))
 
         val controller = WindowCompat.getInsetsController(window, window.decorView)
         controller.isAppearanceLightStatusBars = false
         controller.isAppearanceLightNavigationBars = false
         refreshTabChipsAppearance()
+    }
+
+    private fun styleTabCounterBadge(textColor: Int, fillColor: Int) {
+        if (!::txtTabsCount.isInitialized) return
+        txtTabsCount.setTextColor(textColor)
+        txtTabsCount.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(5).toFloat()
+            setColor(fillColor)
+            setStroke(dp(2), textColor)
+        }
+        updateTabCounterText()
+    }
+
+    private fun updateTabCounterText() {
+        if (!::txtTabsCount.isInitialized) return
+        val count = tabs.size.coerceAtLeast(1)
+        txtTabsCount.text = if (count > 99) "99+" else count.toString()
+    }
+
+    private fun applyToolbarPosition() {
+        val root = rootView as? LinearLayout ?: return
+        val bottom = store.bottomAddressBar
+        val desiredOrder = if (bottom) {
+            listOf(tabStrip, webContainer, progress, findBar, toolbarRow)
+        } else {
+            listOf(tabStrip, toolbarRow, findBar, progress, webContainer)
+        }
+        var alreadyMatches = root.childCount == desiredOrder.size
+        if (alreadyMatches) {
+            for (i in desiredOrder.indices) {
+                if (root.getChildAt(i) !== desiredOrder[i]) {
+                    alreadyMatches = false
+                    break
+                }
+            }
+        }
+        if (alreadyMatches) return
+        root.removeAllViews()
+        desiredOrder.forEach { root.addView(it) }
+    }
+
+    private fun setChromeHiddenByScroll(hidden: Boolean) {
+        if (chromeHiddenByScroll == hidden) return
+        chromeHiddenByScroll = hidden
+        toolbarRow.visibility = if (hidden) View.GONE else View.VISIBLE
+        tabStrip.visibility = if (!hidden && store.showTabStrip) View.VISIBLE else View.GONE
+    }
+
+    private fun restoreToolbarVisibility() {
+        if (!isInPip) {
+            chromeHiddenByScroll = false
+            toolbarRow.visibility = View.VISIBLE
+            tabStrip.visibility = if (store.showTabStrip) View.VISIBLE else View.GONE
+        }
     }
 
     private fun refreshTabChipsAppearance() {
@@ -521,6 +708,7 @@ open class MainActivity : AppCompatActivity() {
         if (!url.startsWith("http://") && !url.startsWith("https://")) return false
         if (websiteBlocker.findMatchingRuleForUrl(url) != null) return true
         if (adultBlocker.isBlockedUrl(url, store.adultProtectionEnabled)) return true
+        if (focusSchedule.findActiveBlock(url) != null) return true
         return false
     }
 
@@ -547,6 +735,15 @@ open class MainActivity : AppCompatActivity() {
             tab.session.stop()
             tab.currentUrl = "about:blank"
             val html = BlockedPageHtml.adultBlockedHtml(host, isDark = dark)
+            loadHtml(tab, html, "about:blocked")
+            return true
+        }
+
+        val focusMatch = focusSchedule.findActiveBlockForHost(host)
+        if (focusMatch != null) {
+            tab.session.stop()
+            tab.currentUrl = "about:blank"
+            val html = BlockedPageHtml.focusBlockedHtml(host, focusMatch.label, focusMatch.detail, isDark = dark)
             loadHtml(tab, html, "about:blocked")
             return true
         }
@@ -722,6 +919,7 @@ open class MainActivity : AppCompatActivity() {
         session.progressDelegate = object : GeckoSession.ProgressDelegate {
             override fun onPageStart(session: GeckoSession, url: String) {
                 tab.blocked.set(0)
+                if (tab === current()) restoreToolbarVisibility()
                 if (!url.startsWith("data:") && !url.startsWith("about:") && !url.startsWith("pipra://")) {
                     if (checkBlockedAndRender(tab, url)) {
                         if (tab === current()) {
@@ -776,8 +974,32 @@ open class MainActivity : AppCompatActivity() {
             override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
                 val disp = response.headers["content-disposition"] ?: response.headers["Content-Disposition"]
                 val mime = response.headers["content-type"] ?: response.headers["Content-Type"]
+                val uriStr = response.uri
                 runOnUiThread {
-                    startDownload(response.uri, null, disp, mime)
+                    val isXpi = uriStr.substringBefore('?').endsWith(".xpi", ignoreCase = true) ||
+                        mime?.contains("x-xpinstall", ignoreCase = true) == true
+                    if (isXpi && uriStr.startsWith("https://")) {
+                        AlertDialog.Builder(themedContext())
+                            .setTitle("Browser Extension Detected")
+                            .setMessage("Install this Firefox/GeckoView extension directly into Pipra, or save the .xpi file?")
+                            .setPositiveButton("Install Extension") { _, _ ->
+                                PipraExtensionManager.installFromUrl(uriStr) { res ->
+                                    runOnUiThread {
+                                        res.fold(
+                                            onSuccess = { ext -> toast("Installed ${ext.name}") },
+                                            onFailure = { err -> toast(err.message ?: "Extension install failed") }
+                                        )
+                                    }
+                                }
+                            }
+                            .setNeutralButton("Download File") { _, _ ->
+                                startDownload(uriStr, null, disp, mime)
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .show()
+                    } else {
+                        startDownload(uriStr, null, disp, mime)
+                    }
                 }
             }
 
@@ -806,20 +1028,138 @@ open class MainActivity : AppCompatActivity() {
             override fun onKill(session: GeckoSession) = recoverCrashedTab(tab)
         }
 
+        session.contentBlockingDelegate = object : ContentBlocking.Delegate {
+            override fun onContentBlocked(session: GeckoSession, event: ContentBlocking.BlockEvent) {
+                tab.blocked.incrementAndGet()
+                store.incrementAdBlocked(1L)
+                val targetUri = event.uri.orEmpty()
+                val anti = event.antiTrackingCategory
+                when {
+                    (anti and ContentBlocking.AntiTracking.FINGERPRINTING) != 0 ->
+                        privacyStats.recordFingerprinterBlock(targetUri)
+                    event.cookieBehaviorCategory != 0 ->
+                        privacyStats.recordCookieBlock(targetUri)
+                    (anti and ContentBlocking.AntiTracking.AD) != 0 ->
+                        privacyStats.recordAdBlock(targetUri)
+                    else ->
+                        privacyStats.recordTrackerBlock(targetUri)
+                }
+            }
+        }
+
+        session.mediaSessionDelegate = object : MediaSession.Delegate {
+            override fun onActivated(session: GeckoSession, mediaSession: MediaSession) {
+                tab.hasActiveMedia = true
+                if (tab === current()) activeMediaPlaying = tab.isMediaPlaying
+            }
+
+            override fun onDeactivated(session: GeckoSession, mediaSession: MediaSession) {
+                tab.hasActiveMedia = false
+                tab.isMediaPlaying = false
+                if (tab === current()) activeMediaPlaying = false
+            }
+
+            override fun onPlay(session: GeckoSession, mediaSession: MediaSession) {
+                tab.hasActiveMedia = true
+                tab.isMediaPlaying = true
+                if (tab === current()) activeMediaPlaying = true
+            }
+
+            override fun onPause(session: GeckoSession, mediaSession: MediaSession) {
+                tab.isMediaPlaying = false
+                if (tab === current()) activeMediaPlaying = false
+            }
+
+            override fun onStop(session: GeckoSession, mediaSession: MediaSession) {
+                tab.isMediaPlaying = false
+                if (tab === current()) activeMediaPlaying = false
+            }
+        }
+
+        session.scrollDelegate = object : GeckoSession.ScrollDelegate {
+            override fun onScrollChanged(session: GeckoSession, scrollX: Int, scrollY: Int) {
+                if (tab !== current() || isFullscreen || isInPip || !store.scrollToHideToolbar) return
+                val delta = scrollY - lastScrollY
+                lastScrollY = scrollY
+                if (delta > 36 && scrollY > 120) {
+                    setChromeHiddenByScroll(true)
+                } else if (delta < -24) {
+                    setChromeHiddenByScroll(false)
+                }
+            }
+        }
+
         session.permissionDelegate = object : GeckoSession.PermissionDelegate {
             override fun onAndroidPermissionsRequest(
                 session: GeckoSession,
                 permissions: Array<out String>?,
                 callback: GeckoSession.PermissionDelegate.Callback
             ) {
-                callback.reject()
+                val reqList = permissions?.filter { it.isNotBlank() }.orEmpty()
+                if (reqList.isEmpty()) {
+                    callback.grant()
+                    return
+                }
+                pendingAndroidPermCallback?.reject()
+                pendingAndroidPermCallback = callback
+                runOnUiThread {
+                    androidPermLauncher.launch(reqList.toTypedArray())
+                }
             }
 
             override fun onContentPermissionRequest(
                 session: GeckoSession,
                 perm: GeckoSession.PermissionDelegate.ContentPermission
-            ): GeckoResult<Int> =
-                GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
+            ): GeckoResult<Int> {
+                val type = when (perm.permission) {
+                    GeckoSession.PermissionDelegate.PERMISSION_GEOLOCATION ->
+                        SitePermissionType.GEOLOCATION
+                    GeckoSession.PermissionDelegate.PERMISSION_DESKTOP_NOTIFICATION ->
+                        SitePermissionType.NOTIFICATIONS
+                    GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_AUDIBLE,
+                    GeckoSession.PermissionDelegate.PERMISSION_AUTOPLAY_INAUDIBLE ->
+                        SitePermissionType.MEDIA_AUTOPLAY
+                    else -> null
+                } ?: return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
+
+                val host = DomainUtils.extractHostFromUrl(perm.uri) ?: perm.uri
+                if (!isPrivate) {
+                    when (sitePermissions.getDecision(host, type)) {
+                        SitePermissionDecision.ALLOW ->
+                            return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
+                        SitePermissionDecision.DENY ->
+                            return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY)
+                        SitePermissionDecision.ASK -> Unit
+                    }
+                }
+                if (type == SitePermissionType.MEDIA_AUTOPLAY) {
+                    return GeckoResult.fromValue(GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW)
+                }
+
+                val result = GeckoResult<Int>()
+                runOnUiThread {
+                    BrowserV4Dialogs.showSitePermissionPrompt(
+                        activity = this@MainActivity,
+                        themedCtx = themedContext(),
+                        host = host,
+                        type = type,
+                        isPrivate = isPrivate
+                    ) { allowed, remember ->
+                        if (remember) {
+                            sitePermissions.setDecision(
+                                host,
+                                type,
+                                if (allowed) SitePermissionDecision.ALLOW else SitePermissionDecision.DENY
+                            )
+                        }
+                        result.complete(
+                            if (allowed) GeckoSession.PermissionDelegate.ContentPermission.VALUE_ALLOW
+                            else GeckoSession.PermissionDelegate.ContentPermission.VALUE_DENY
+                        )
+                    }
+                }
+                return result
+            }
 
             override fun onMediaPermissionRequest(
                 session: GeckoSession,
@@ -828,7 +1168,43 @@ open class MainActivity : AppCompatActivity() {
                 audio: Array<out GeckoSession.PermissionDelegate.MediaSource>?,
                 callback: GeckoSession.PermissionDelegate.MediaCallback
             ) {
-                callback.reject()
+                val host = DomainUtils.extractHostFromUrl(uri) ?: uri
+                val needsCamera = video?.isNotEmpty() == true
+                val needsMic = audio?.isNotEmpty() == true
+                if (!needsCamera && !needsMic) {
+                    callback.reject()
+                    return
+                }
+                val primaryType = if (needsCamera) SitePermissionType.CAMERA else SitePermissionType.MICROPHONE
+                if (!isPrivate) {
+                    val camDecision = if (needsCamera) sitePermissions.getDecision(host, SitePermissionType.CAMERA) else SitePermissionDecision.ALLOW
+                    val micDecision = if (needsMic) sitePermissions.getDecision(host, SitePermissionType.MICROPHONE) else SitePermissionDecision.ALLOW
+                    if (camDecision == SitePermissionDecision.DENY || micDecision == SitePermissionDecision.DENY) {
+                        callback.reject()
+                        return
+                    }
+                    if (camDecision == SitePermissionDecision.ALLOW && micDecision == SitePermissionDecision.ALLOW) {
+                        callback.grant(video?.firstOrNull(), audio?.firstOrNull())
+                        return
+                    }
+                }
+                runOnUiThread {
+                    BrowserV4Dialogs.showSitePermissionPrompt(
+                        activity = this@MainActivity,
+                        themedCtx = themedContext(),
+                        host = host,
+                        type = primaryType,
+                        isPrivate = isPrivate
+                    ) { allowed, remember ->
+                        if (remember) {
+                            val dec = if (allowed) SitePermissionDecision.ALLOW else SitePermissionDecision.DENY
+                            if (needsCamera) sitePermissions.setDecision(host, SitePermissionType.CAMERA, dec)
+                            if (needsMic) sitePermissions.setDecision(host, SitePermissionType.MICROPHONE, dec)
+                        }
+                        if (allowed) callback.grant(video?.firstOrNull(), audio?.firstOrNull())
+                        else callback.reject()
+                    }
+                }
             }
         }
 
@@ -928,10 +1304,10 @@ open class MainActivity : AppCompatActivity() {
                 "bookmarks" -> if (isPrivate) toast("Bookmarks are disabled in Private mode") else showBookmarks()
                 "history" -> if (isPrivate) toast("History is disabled in Private mode") else showHistory()
                 "downloads" -> openDownloads()
-                "settings" -> {
-                    if (isPrivate) toast("Open Settings from normal browser window")
-                    else startActivity(Intent(this, SettingsActivity::class.java))
-                }
+                "settings" -> openSettingsSection(null)
+                "extensions" -> openSettingsSection("EXTENSIONS")
+                "focus" -> openSettingsSection("FOCUS_SCHEDULE")
+                "stats" -> openSettingsSection("PRIVACY_STATS")
                 "game" -> startActivity(Intent(this, OfflineGameActivity::class.java))
                 "retry" -> {
                     val target = tab.lastFailedUrl
@@ -959,6 +1335,7 @@ open class MainActivity : AppCompatActivity() {
                 if (blockedByAds) {
                     tab.blocked.incrementAndGet()
                     store.incrementAdBlocked(1L)
+                    privacyStats.recordAdBlock(rawStr)
                 }
                 return true
             }
@@ -1009,6 +1386,7 @@ open class MainActivity : AppCompatActivity() {
                 val host = u.host ?: return false
                 if (mainFrame && store.httpsOnly && host !in httpAllowed) {
                     upgradedHosts.add(host)
+                    privacyStats.recordHttpsUpgrade(host)
                     val upgraded = u.buildUpon().scheme("https").build().toString()
                     val finalUrl = if (store.stripTrackingParams) adBlocker.stripTrackingParams(upgraded) else upgraded
                     if (!checkBlockedAndRender(tab, finalUrl)) {
@@ -1025,6 +1403,18 @@ open class MainActivity : AppCompatActivity() {
             "intent" -> { openIntentUri(tab, u, gesture); return true }
             else -> { openExternal(Intent(Intent.ACTION_VIEW, u), gesture); return true }
         }
+    }
+
+    private fun openSettingsSection(sectionName: String?) {
+        if (isPrivate) {
+            toast("Open Settings from normal browser window")
+            return
+        }
+        val intent = Intent(this, SettingsActivity::class.java)
+        if (!sectionName.isNullOrBlank()) {
+            intent.putExtra(SettingsActivity.EXTRA_SECTION, sectionName)
+        }
+        startActivity(intent)
     }
 
     private fun promptCustomSearchEngine(tab: Tab) {
@@ -1094,6 +1484,7 @@ open class MainActivity : AppCompatActivity() {
         val host = u.host
         if (u.scheme == "http" && store.httpsOnly && host != null && host !in httpAllowed) {
             upgradedHosts.add(host)
+            privacyStats.recordHttpsUpgrade(host)
             val httpsUrl = u.buildUpon().scheme("https").build().toString()
             if (!checkBlockedAndRender(tab, httpsUrl)) loadInto(tab, httpsUrl)
         } else {
@@ -1110,11 +1501,16 @@ open class MainActivity : AppCompatActivity() {
             }
             url == Store.DEFAULT_HOMEPAGE -> {
                 tab.currentUrl = Store.DEFAULT_HOMEPAGE
+                val stats = privacyStats.snapshot()
+                val extCount = PipraExtensionManager.installed.value.count { it.enabled }
                 val html = BlockedPageHtml.pipraHomeHtml(
                     activeEngine = store.searchEngine,
                     availableEngines = store.availableSearchEngines(),
                     bookmarks = if (isPrivate) emptyList() else store.bookmarks(),
-                    isDark = isDarkUi()
+                    isDark = isDarkUi(),
+                    privacyTotalBlocked = stats.totalBlocked,
+                    httpsUpgrades = stats.httpsUpgrades,
+                    activeExtensionCount = extCount
                 )
                 loadHtml(tab, html, Store.DEFAULT_HOMEPAGE)
                 if (tab === current()) setUrlBarText("")
@@ -1137,7 +1533,12 @@ open class MainActivity : AppCompatActivity() {
         currentIndex = index
         val tab = tabs[index]
         geckoView.setSession(tab.session)
+        tabs.forEach { t -> PipraExtensionManager.updateActiveSession(t.session, t === tab) }
+        activeMediaPlaying = tab.isMediaPlaying
+        lastScrollY = 0
+        restoreToolbarVisibility()
         refreshTabChipsAppearance()
+        updateTabCounterText()
         setUrlBarText(displayUrl(tab.currentUrl ?: ""))
         updateNavButtons()
         if (findBar.visibility == View.VISIBLE) closeFind()
@@ -1157,8 +1558,56 @@ open class MainActivity : AppCompatActivity() {
         }
         tabBar.removeView(tab.chip)
         try { tab.session.close() } catch (_: Exception) {}
+        updateTabCounterText()
         if (tabs.isEmpty()) createTab(homeUrl)
         else switchTo(index.coerceAtMost(tabs.size - 1))
+    }
+
+    private fun showTabSwitcher() {
+        val summaries = tabs.mapIndexed { idx, tab ->
+            BrowserTabSummary(
+                index = idx,
+                title = tab.title,
+                url = tab.currentUrl.orEmpty(),
+                isCurrent = idx == currentIndex,
+                blockedCount = tab.blocked.get(),
+                groupName = tab.groupName,
+                groupColorHex = tab.groupColorHex
+            )
+        }
+        BrowserV4Dialogs.showTabSwitcherSheet(
+            activity = this,
+            themedCtx = themedContext(),
+            tabs = summaries,
+            closedCount = closedTabs.size,
+            isPrivate = isPrivate,
+            isDark = isDarkUi(),
+            onSelectTab = { idx -> switchTo(idx) },
+            onCloseTab = { idx -> closeTab(idx) },
+            onSetTabGroup = { idx, preset ->
+                tabs.getOrNull(idx)?.let { t ->
+                    t.groupName = if (preset == TabGroupPreset.NONE) "" else preset.label
+                    t.groupColorHex = preset.colorHex
+                    refreshTabChipsAppearance()
+                }
+            },
+            onNewTab = { createTab(homeUrl) },
+            onNewPrivateWindow = { openPrivateWindow() },
+            onReopenClosed = { reopenClosedTab() },
+            onCloseOthers = { closeOtherTabs() }
+        )
+    }
+
+    private fun closeOtherTabs() {
+        val keep = current() ?: return
+        val toClose = tabs.filter { it !== keep }
+        toClose.forEach { t ->
+            tabBar.removeView(t.chip)
+            try { t.session.close() } catch (_: Exception) {}
+        }
+        tabs.clear()
+        tabs.add(keep)
+        switchTo(0)
     }
 
     private fun reopenClosedTab() {
@@ -1373,6 +1822,35 @@ open class MainActivity : AppCompatActivity() {
         val blockedHere = tab?.blocked?.get() ?: 0
         val adStatus = if (store.shieldsEnabled) "Ad Blocker (${store.adBlockMode.label}) · $blockedHere blocked here" else "Ad Blocker off (tap to enable)"
         item(adStatus) { toggleShields() }
+        if (!isPrivate) {
+            val totalBlocked = privacyStats.snapshot().totalBlocked
+            item("Privacy Shield Stats ($totalBlocked blocked total)") { openSettingsSection("PRIVACY_STATS") }
+        }
+
+        val activeExtActions = PipraExtensionManager.installed.value.filter { it.enabled && it.hasBrowserAction }
+        if (activeExtActions.isNotEmpty()) {
+            val extStrip = HorizontalScrollView(this).apply {
+                isHorizontalScrollBarEnabled = false
+                setPadding(dp(16), dp(6), dp(16), dp(6))
+            }
+            val extRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            activeExtActions.forEach { ext ->
+                val badge = if (ext.badgeText.isNotBlank()) " (${ext.badgeText})" else ""
+                extRow.addView(android.widget.Button(themedContext()).apply {
+                    text = "${ext.name}$badge"
+                    minHeight = dp(48)
+                    setOnClickListener {
+                        sheet.dismiss()
+                        if (!PipraExtensionManager.triggerAction(ext.id)) {
+                            openSettingsSection("EXTENSIONS")
+                        }
+                    }
+                })
+            }
+            extStrip.addView(extRow)
+            col.addView(extStrip)
+        }
+
         if (host != null && !isPrivate) {
             val isException = store.isAdBlockException(host)
             item(if (isException) "Resume Ad Blocker on $host" else "Pause Ad Blocker on $host") {
@@ -1381,9 +1859,21 @@ open class MainActivity : AppCompatActivity() {
                 toast(if (isException) "Ad Blocker resumed on $host" else "Ad Blocker paused on $host")
             }
         }
+        item("Tabs (${tabs.size})") { showTabSwitcher() }
         item(if (isPrivate) "New private tab" else "New tab") { createTab(homeUrl) }
         if (closedTabs.isNotEmpty()) {
             item("Reopen closed tab (${closedTabs.size})") { reopenClosedTab() }
+        }
+        if (url != null) {
+            item("Reader Mode") { openReaderModeCurrent() }
+            item("Save Page as PDF") { savePageAsPdf() }
+        }
+        if (Build.VERSION.SDK_INT >= 26 && (tab?.hasActiveMedia == true || isFullscreen)) {
+            item("Picture-in-Picture") { enterPipMode() }
+        }
+        if (!isPrivate) {
+            item("Extensions & Add-ons (${PipraExtensionManager.installed.value.size})") { openSettingsSection("EXTENSIONS") }
+            item("Focus Schedule & Pomodoro") { openSettingsSection("FOCUS_SCHEDULE") }
         }
         if (isPrivate) {
             item("Erase & close private window") { closeWindow() }
@@ -1406,15 +1896,79 @@ open class MainActivity : AppCompatActivity() {
         item("Share page") { url?.let { shareText(it) } ?: toast("Open a page first") }
         item("Copy link") { url?.let { copyText(it, "Link copied") } ?: toast("Open a page first") }
         if (!isPrivate) {
-            item("Settings") { startActivity(Intent(this, SettingsActivity::class.java)) }
+            item("Settings") { openSettingsSection(null) }
         }
         item("Donate to Developer") { createTab(DONATE_URL) }
-        item("About Pipra") {
-            startActivity(Intent(this, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_SECTION, "ABOUT"))
-        }
+        item("About Pipra v4.0") { openSettingsSection("ABOUT") }
 
         sheet.setContentView(scroll)
         sheet.show()
+    }
+
+    private fun openReaderModeCurrent() {
+        val tab = current() ?: return
+        val url = tab.currentUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") } ?: run {
+            toast("Open a webpage to use Reader Mode")
+            return
+        }
+        val ua = if (tab.desktop) DESKTOP_UA else "Mozilla/5.0 (Android; Mobile; rv:144.0) Gecko/144.0 Firefox/144.0"
+        val cookies = if (isPrivate) null else CookieManager.getInstance().getCookie(url)
+        BrowserV4Dialogs.showReaderModeSheet(
+            activity = this,
+            themedCtx = themedContext(),
+            url = url,
+            fallbackTitle = tab.title,
+            userAgent = ua,
+            cookieHeader = cookies,
+            store = store,
+            onSavePdf = { savePageAsPdf() },
+            toast = ::toast
+        )
+    }
+
+    private fun savePageAsPdf() {
+        val tab = current() ?: return
+        val url = tab.currentUrl?.takeIf { it.startsWith("http://") || it.startsWith("https://") } ?: run {
+            toast("Open a webpage before exporting PDF")
+            return
+        }
+        val titleBase = tab.title.ifBlank { DomainUtils.extractHostFromUrl(url) ?: "pipra_page" }
+        val fileNameHint = "${titleBase.take(40)}.pdf"
+        toast("Exporting PDF…")
+        tab.session.saveAsPdf().accept({ stream ->
+            if (stream == null) {
+                runOnUiThread { toast("PDF export is unavailable for this page") }
+                return@accept
+            }
+            Thread {
+                val item = try {
+                    val outFile = PipraDownloadManager.uniqueDownloadTarget(this, fileNameHint)
+                    stream.use { input ->
+                        outFile.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    PipraDownloadManager.registerCompletedFile(
+                        context = this,
+                        fileName = outFile.name,
+                        sourceUrl = url,
+                        mimeType = "application/pdf",
+                        file = outFile,
+                        recordInHistory = !isPrivate
+                    )
+                } catch (_: Exception) {
+                    null
+                }
+                runOnUiThread {
+                    if (item != null) {
+                        toast("Saved PDF: ${item.fileName}")
+                        PipraDownloadManager.openDownloadItem(this, item)
+                    } else {
+                        toast("Could not save PDF")
+                    }
+                }
+            }.start()
+        }, {
+            runOnUiThread { toast("Could not generate PDF for this page") }
+        })
     }
 
     private fun menuRow(label: String, textColor: Int, onClick: () -> Unit): View {

@@ -76,15 +76,73 @@ import com.pipra.browser.ui.theme.PipraColors
 import com.pipra.browser.ui.theme.PipraPalette
 import com.pipra.browser.ui.theme.PipraTheme
 import java.util.Locale
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import java.util.concurrent.Executors
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
+private object OfflineGameAudio {
+    private val executor = Executors.newSingleThreadExecutor()
+
+    fun play(event: GameEvent, enabled: Boolean) {
+        if (!enabled) return
+        val (freq, ms) = when (event) {
+            GameEvent.JUMP -> 520.0 to 55
+            GameEvent.DOUBLE_JUMP -> 740.0 to 65
+            GameEvent.DIVE -> 300.0 to 50
+            GameEvent.SUGAR_COLLECTED -> 980.0 to 70
+            GameEvent.SHIELD_COLLECTED -> 880.0 to 95
+            GameEvent.SHIELD_USED -> 360.0 to 110
+            GameEvent.MILESTONE -> 1046.0 to 120
+            GameEvent.CRASH -> 180.0 to 160
+        }
+        executor.execute {
+            runCatching {
+                val sampleRate = 22050
+                val count = (sampleRate * ms / 1000).coerceAtLeast(1)
+                val pcm = ShortArray(count)
+                for (i in 0 until count) {
+                    val env = 1.0 - (i.toDouble() / count)
+                    val s = sin(2.0 * PI * i * freq / sampleRate) * env * 0.28
+                    pcm[i] = (s * Short.MAX_VALUE).toInt().toShort()
+                }
+                val bufBytes = pcm.size * 2
+                val track = AudioTrack.Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_GAME)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    )
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setSampleRate(sampleRate)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build()
+                    )
+                    .setTransferMode(AudioTrack.MODE_STATIC)
+                    .setBufferSizeInBytes(bufBytes)
+                    .build()
+                track.write(pcm, 0, pcm.size)
+                track.play()
+                Thread.sleep((ms + 20).toLong())
+                track.release()
+            }
+        }
+    }
+}
+
 /**
  * Upgraded 100% offline "Pipra Ant Dash" arcade runner.
  * Features parallax day/night skies, custom obstacle art, collectible sugar crystals,
- * protective leaf shields, fast-dive controls, haptic feedback, and persistent high score.
+ * protective leaf shields, fast-dive controls, haptic feedback, selectable skins, and retro SFX.
  */
 class OfflineGameActivity : ComponentActivity() {
 
@@ -96,7 +154,11 @@ class OfflineGameActivity : ComponentActivity() {
             PipraTheme(themeMode = store.themeMode) {
                 PipraAntDashScreen(
                     initialBest = store.bestGameScore,
+                    initialSoundEnabled = store.gameSoundEnabled,
+                    initialSkin = AntSkin.fromKey(store.gameSkinKey),
                     onBestUpdated = { score -> store.bestGameScore = score },
+                    onSoundToggled = { enabled -> store.gameSoundEnabled = enabled },
+                    onSkinSelected = { skin -> store.gameSkinKey = skin.key },
                     onExit = { finish() }
                 )
             }
@@ -107,16 +169,23 @@ class OfflineGameActivity : ComponentActivity() {
 @Composable
 private fun PipraAntDashScreen(
     initialBest: Int,
+    initialSoundEnabled: Boolean,
+    initialSkin: AntSkin,
     onBestUpdated: (Int) -> Unit,
+    onSoundToggled: (Boolean) -> Unit,
+    onSkinSelected: (AntSkin) -> Unit,
     onExit: () -> Unit
 ) {
     val palette = LocalPipraColors.current
     val haptic = LocalHapticFeedback.current
     val engine = remember(initialBest) { OfflineGameEngine(initialBest) }
     var frameTick by remember { mutableIntStateOf(0) }
+    var soundEnabled by remember { androidx.compose.runtime.mutableStateOf(initialSoundEnabled) }
+    var currentSkin by remember { androidx.compose.runtime.mutableStateOf(initialSkin) }
 
     fun handleEvents(events: List<GameEvent>) {
         for (ev in events) {
+            OfflineGameAudio.play(ev, soundEnabled)
             when (ev) {
                 GameEvent.JUMP, GameEvent.DOUBLE_JUMP, GameEvent.SUGAR_COLLECTED, GameEvent.SHIELD_COLLECTED ->
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -198,6 +267,19 @@ private fun PipraAntDashScreen(
                         .padding(end = 6.dp)
                         .testTag("game_score_text")
                 )
+                IconButton(
+                    onClick = {
+                        soundEnabled = !soundEnabled
+                        onSoundToggled(soundEnabled)
+                    },
+                    modifier = Modifier.testTag("game_sound_button")
+                ) {
+                    Icon(
+                        imageVector = if (soundEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                        contentDescription = if (soundEnabled) "Mute SFX" else "Unmute SFX",
+                        tint = if (soundEnabled) PipraColors.ElectricBlueLight else PipraColors.SilverMuted
+                    )
+                }
                 IconButton(
                     onClick = {
                         if (engine.hasStarted && !engine.isGameOver) {
@@ -285,6 +367,27 @@ private fun PipraAntDashScreen(
                     }
                 }
 
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = PipraColors.Charcoal,
+                    border = BorderStroke(1.dp, Color(currentSkin.accentHex)),
+                    onClick = {
+                        val all = AntSkin.entries
+                        val next = all[(all.indexOf(currentSkin) + 1) % all.size]
+                        currentSkin = next
+                        onSkinSelected(next)
+                    },
+                    modifier = Modifier.testTag("game_skin_button")
+                ) {
+                    Text(
+                        text = currentSkin.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(currentSkin.accentHex),
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
+                }
+
                 Spacer(Modifier.weight(1f))
 
                 Surface(
@@ -339,7 +442,8 @@ private fun PipraAntDashScreen(
                     drawGameWorld(
                         engine = engine,
                         palette = palette,
-                        nightSky = effectiveNight
+                        nightSky = effectiveNight,
+                        skin = currentSkin
                     )
                 }
 
@@ -457,7 +561,8 @@ private fun PipraAntDashScreen(
 private fun DrawScope.drawGameWorld(
     engine: OfflineGameEngine,
     palette: PipraPalette,
-    nightSky: Boolean
+    nightSky: Boolean,
+    skin: AntSkin
 ) {
     val groundY = size.height * 0.77f
     val densityPx = density
@@ -724,14 +829,16 @@ private fun DrawScope.drawGameWorld(
         }
         val tiltDegrees = (-engine.velocityY * 0.025f).coerceIn(-18f, 18f)
         rotate(degrees = tiltDegrees, pivot = Offset(antX, antBottomY - 12f * densityPx)) {
+            val effectiveBody = if (skin == AntSkin.CLASSIC && nightSky) Color(0xFFF8FAFC) else Color(skin.bodyHex)
+            val effectiveAccent = Color(skin.accentHex)
             drawPipraAnt(
                 centerX = antX,
                 bottomY = antBottomY,
                 densityPx = densityPx,
                 legPhase = engine.legPhase,
                 airborne = engine.playerY > 1f,
-                bodyColor = if (nightSky) Color(0xFFF8FAFC) else palette.textPrimary,
-                accentColor = palette.accent
+                bodyColor = effectiveBody,
+                accentColor = effectiveAccent
             )
         }
     }

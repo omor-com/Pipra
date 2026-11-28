@@ -441,7 +441,7 @@ fun AboutPipraScreen() {
                         color = PipraColors.SilverPrimary
                     )
                     Text(
-                        text = "Private Android Web Browser · v3.0",
+                        text = "Private Android Web Browser · v4.0",
                         style = MaterialTheme.typography.bodyMedium,
                         color = PipraColors.ElectricBlueLight
                     )
@@ -554,19 +554,19 @@ fun AboutPipraScreen() {
     }
 }
 
-private const val PIPRA_PRIVACY_POLICY = """Pipra Browser Privacy Policy (v3.0)
+private const val PIPRA_PRIVACY_POLICY = """Pipra Browser Privacy Policy (v3.0) · Updated for v4.0
 
 1. Zero Telemetry & No Accounts
 Pipra does not require registration or sign-in, contains no third-party analytics SDKs, and does not collect or transmit personal browsing history, search queries, bookmarks, or downloaded filenames to the developer.
 
 2. Local-Only Storage
-Browsing history, bookmarks, offline saved web archives, theme preferences, download records, and website blocking rules are stored strictly in private app storage on your device (with Android Auto-Backup disabled).
+Browsing history, bookmarks, offline saved web archives, theme preferences, download records, focus schedules, site permissions, PIN hash, and website blocking rules are stored strictly in private app storage on your device (with Android Auto-Backup disabled).
 
 3. Private Windows (:incognito)
 Private windows run in a separate Android process (:incognito) with an ephemeral cookie jar and FLAG_SECURE screenshot protection. History is not recorded in private mode, and cookies/site storage are wiped when the private window closes. Private browsing does not hide network traffic from websites you visit, your ISP, or network administrators.
 
-4. Network Connections
-Connections occur when you navigate to URLs, perform searches through your selected search engine, download files you request, or manually tap update for optional open-source Ad Blocker / Adult Protection filter lists. Local files opened in Pipra's file viewer are inspected strictly on-device without uploading data.
+4. Network Connections & Extensions
+Connections occur when you navigate to URLs, perform searches through your selected search engine, download files you request, install Firefox WebExtensions (.xpi) you choose, or manually tap update for optional open-source Ad Blocker / Adult Protection filter lists. Local files opened in Pipra's file viewer are inspected strictly on-device without uploading data.
 
 5. Optional Developer Support
 Tapping "Donate to Developer" opens https://www.supportkori.com/muhammedomor in your browser. Any contribution is completely optional and handled externally by that service.
@@ -576,7 +576,7 @@ Developer: Muhammad Omor
 Email: muhammedomor.dev@gmail.com
 Source: https://github.com/omor-com/Pipra"""
 
-private const val PIPRA_TERMS_AND_CONDITIONS = """Pipra Browser Terms & Conditions (v3.0)
+private const val PIPRA_TERMS_AND_CONDITIONS = """Pipra Browser Terms & Conditions (v4.0)
 
 1. Scope of Service
 Pipra is an open-source privacy-focused Android browser developed by Muhammad Omor and provided "as is" without warranties of any kind.

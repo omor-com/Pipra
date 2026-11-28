@@ -32,17 +32,36 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
 import com.pipra.browser.ui.settings.AboutPipraScreen
 import com.pipra.browser.ui.settings.AdBlockerSettingsScreen
 import com.pipra.browser.ui.settings.AdultProtectionSettingsScreen
+import com.pipra.browser.ui.settings.AppLockSettingsScreen
 import com.pipra.browser.ui.settings.AppearanceSettingsScreen
 import com.pipra.browser.ui.settings.DataManagementScreen
 import com.pipra.browser.ui.settings.DownloadsSettingsScreen
+import com.pipra.browser.ui.settings.ExtensionsSettingsScreen
+import com.pipra.browser.ui.settings.FocusScheduleSettingsScreen
 import com.pipra.browser.ui.settings.PrivacySettingsScreen
+import com.pipra.browser.ui.settings.PrivacyStatsSettingsScreen
 import com.pipra.browser.ui.settings.SearchEngineSettingsScreen
 import com.pipra.browser.ui.settings.SecuritySettingsScreen
 import com.pipra.browser.ui.settings.SettingsHubScreen
 import com.pipra.browser.ui.settings.SettingsSection
+import com.pipra.browser.ui.settings.SitePermissionsSettingsScreen
+import com.pipra.browser.ui.settings.pipraTextFieldColors
 import com.pipra.browser.ui.theme.PipraColors
 import com.pipra.browser.ui.theme.PipraTheme
 
@@ -102,61 +121,112 @@ class SettingsActivity : ComponentActivity() {
                     currentSectionName = null
                 }
 
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = PipraColors.MatteBlack,
-                    contentWindowInsets = WindowInsets.safeDrawing,
-                    snackbarHost = { SnackbarHost(snackbarHostState) },
-                    topBar = {
-                        TopAppBar(
-                            title = {
-                                Text(
-                                    text = currentSection?.title ?: "Settings",
-                                    color = PipraColors.SilverPrimary
-                                )
-                            },
-                            navigationIcon = {
-                                IconButton(
-                                    onClick = {
-                                        if (currentSection != null) currentSectionName = null
-                                        else finish()
-                                    },
-                                    modifier = Modifier.testTag("settings_back_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Back",
-                                        tint = PipraColors.SilverPrimary
-                                    )
+                val appLock = remember { AppLockManager(this@SettingsActivity) }
+                var settingsUnlocked by rememberSaveable {
+                    mutableStateOf(!appLock.isLockRequired(LockScope.SETTINGS))
+                }
+                var pinEntry by remember { mutableStateOf("") }
+                var pinError by remember { mutableStateOf<String?>(null) }
+
+                if (!settingsUnlocked) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(28.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Pipra Settings Locked", style = MaterialTheme.typography.headlineSmall, color = PipraColors.SilverPrimary)
+                        Spacer(Modifier.height(8.dp))
+                        Text("Enter your App Lock PIN to access Settings.", style = MaterialTheme.typography.bodySmall, color = PipraColors.SilverMuted)
+                        Spacer(Modifier.height(16.dp))
+                        OutlinedTextField(
+                            value = pinEntry,
+                            onValueChange = { if (it.length <= 8 && it.all(Char::isDigit)) { pinEntry = it; pinError = null } },
+                            label = { Text("PIN") },
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                            singleLine = true,
+                            colors = pipraTextFieldColors(),
+                            modifier = Modifier.fillMaxWidth().testTag("settings_unlock_pin_input")
+                        )
+                        pinError?.let {
+                            Spacer(Modifier.height(6.dp))
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = PipraColors.Danger)
+                        }
+                        Spacer(Modifier.height(14.dp))
+                        Button(
+                            onClick = {
+                                when (val res = appLock.verifyPin(pinEntry)) {
+                                    is PinVerifyResult.Success -> settingsUnlocked = true
+                                    is PinVerifyResult.Invalid -> pinError = "Wrong PIN (${res.remainingAttempts} attempts left)"
+                                    is PinVerifyResult.LockedOut -> pinError = "Too many attempts. Wait ${res.remainingSeconds}s"
                                 }
                             },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = PipraColors.Charcoal,
-                                titleContentColor = PipraColors.SilverPrimary
-                            )
-                        )
+                            colors = ButtonDefaults.buttonColors(containerColor = PipraColors.ElectricBlue),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Unlock Settings") }
                     }
-                ) { innerPadding ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                    ) {
-                        when (currentSection) {
-                            null -> SettingsHubScreen(
-                                state = state,
-                                onSelect = { currentSectionName = it.name }
+                } else {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        containerColor = PipraColors.MatteBlack,
+                        contentWindowInsets = WindowInsets.safeDrawing,
+                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                        topBar = {
+                            TopAppBar(
+                                title = {
+                                    Text(
+                                        text = currentSection?.title ?: "Settings",
+                                        color = PipraColors.SilverPrimary
+                                    )
+                                },
+                                navigationIcon = {
+                                    IconButton(
+                                        onClick = {
+                                            if (currentSection != null) currentSectionName = null
+                                            else finish()
+                                        },
+                                        modifier = Modifier.testTag("settings_back_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Back",
+                                            tint = PipraColors.SilverPrimary
+                                        )
+                                    }
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = PipraColors.Charcoal,
+                                    titleContentColor = PipraColors.SilverPrimary
+                                )
                             )
-                            SettingsSection.APPEARANCE -> AppearanceSettingsScreen(state, vm)
-                            SettingsSection.AD_BLOCKER -> AdBlockerSettingsScreen(state, vm)
-                            SettingsSection.WEBSITE_BLOCKING -> com.pipra.browser.ui.settings.WebsiteBlockingSettingsScreen(state, vm)
-                            SettingsSection.ADULT_PROTECTION -> AdultProtectionSettingsScreen(state, vm)
-                            SettingsSection.PRIVACY -> PrivacySettingsScreen(state, vm)
-                            SettingsSection.SECURITY -> SecuritySettingsScreen(state, vm)
-                            SettingsSection.DOWNLOADS -> DownloadsSettingsScreen(state, vm)
-                            SettingsSection.SEARCH_ENGINE -> SearchEngineSettingsScreen(state, vm)
-                            SettingsSection.DATA_MANAGEMENT -> DataManagementScreen(vm)
-                            SettingsSection.ABOUT -> AboutPipraScreen()
+                        }
+                    ) { innerPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        ) {
+                            when (currentSection) {
+                                null -> SettingsHubScreen(
+                                    state = state,
+                                    onSelect = { currentSectionName = it.name }
+                                )
+                                SettingsSection.APPEARANCE -> AppearanceSettingsScreen(state, vm)
+                                SettingsSection.EXTENSIONS -> ExtensionsSettingsScreen(state, vm)
+                                SettingsSection.AD_BLOCKER -> AdBlockerSettingsScreen(state, vm)
+                                SettingsSection.PRIVACY_STATS -> PrivacyStatsSettingsScreen(state, vm)
+                                SettingsSection.WEBSITE_BLOCKING -> com.pipra.browser.ui.settings.WebsiteBlockingSettingsScreen(state, vm)
+                                SettingsSection.FOCUS_SCHEDULE -> FocusScheduleSettingsScreen(state, vm)
+                                SettingsSection.ADULT_PROTECTION -> AdultProtectionSettingsScreen(state, vm)
+                                SettingsSection.SITE_PERMISSIONS -> SitePermissionsSettingsScreen(state, vm)
+                                SettingsSection.APP_LOCK -> AppLockSettingsScreen(state, vm)
+                                SettingsSection.PRIVACY -> PrivacySettingsScreen(state, vm)
+                                SettingsSection.SECURITY -> SecuritySettingsScreen(state, vm)
+                                SettingsSection.DOWNLOADS -> DownloadsSettingsScreen(state, vm)
+                                SettingsSection.SEARCH_ENGINE -> SearchEngineSettingsScreen(state, vm)
+                                SettingsSection.DATA_MANAGEMENT -> DataManagementScreen(vm)
+                                SettingsSection.ABOUT -> AboutPipraScreen()
+                            }
                         }
                     }
                 }

@@ -19,4 +19,13 @@
     <string name="downloads_center_title">Downloads &amp; Files</string>
     <string name="file_viewer_title">Pipra File Viewer</string>
     <string name="offline_game_title">Pipra Ant Dash</string>
+    <string name="tabs_switcher">Tabs</string>
+    <string name="pip_mode">Picture in Picture</string>
+    <string name="reader_mode">Reader Mode</string>
+    <string name="save_pdf">Save as PDF</string>
+    <string name="extensions_title">Extensions</string>
+    <string name="focus_title">Focus Schedule</string>
+    <string name="app_lock_title">App Lock</string>
+    <string name="privacy_stats_title">Privacy Shield Stats</string>
+    <string name="site_permissions_title">Site Permissions</string>
 </resources>

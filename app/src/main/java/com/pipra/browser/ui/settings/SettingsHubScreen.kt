@@ -65,17 +65,29 @@ import com.pipra.browser.ui.theme.PipraColors
 import java.text.DateFormat
 import java.util.Date
 
-enum class SettingsSection(val title: String, val icon: ImageVector) {
-    APPEARANCE("Appearance", Icons.Default.Palette),
-    AD_BLOCKER("Ad Blocker", Icons.Default.Shield),
-    WEBSITE_BLOCKING("Website Blocking", Icons.Default.Block),
-    ADULT_PROTECTION("Adult Protection", Icons.Default.Lock),
-    PRIVACY("Privacy", Icons.Default.PrivacyTip),
-    SECURITY("Security", Icons.Default.Security),
-    DOWNLOADS("Downloads", Icons.Default.Download),
-    SEARCH_ENGINE("Search Engine", Icons.Default.Search),
-    DATA_MANAGEMENT("Data Management", Icons.Default.DeleteSweep),
-    ABOUT("About Pipra", Icons.Default.Info)
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VerifiedUser
+
+enum class SettingsSection(val title: String, val icon: ImageVector, val keywords: String = "") {
+    APPEARANCE("Appearance", Icons.Default.Palette, "theme dark light bottom address bar reader toolbar"),
+    EXTENSIONS("Extensions (.xpi)", Icons.Default.Extension, "addons firefox ublock xpi"),
+    AD_BLOCKER("Ad Blocker", Icons.Default.Shield, "filters ads trackers block"),
+    PRIVACY_STATS("Privacy Shield Stats", Icons.Default.BarChart, "stats blocked trackers cookies https"),
+    WEBSITE_BLOCKING("Website Blocking", Icons.Default.Block, "lock block timer days"),
+    FOCUS_SCHEDULE("Focus & Pomodoro", Icons.Default.Schedule, "pomodoro schedule focus timer"),
+    ADULT_PROTECTION("Adult Protection", Icons.Default.Lock, "nsfw filter"),
+    SITE_PERMISSIONS("Site Permissions", Icons.Default.Tune, "camera microphone location notifications"),
+    APP_LOCK("App Lock (PIN)", Icons.Default.VerifiedUser, "pin biometric lock security"),
+    PRIVACY("Privacy", Icons.Default.PrivacyTip, "https cookies popups tracking"),
+    SECURITY("Security", Icons.Default.Security, "javascript tls safebrowsing"),
+    DOWNLOADS("Downloads", Icons.Default.Download, "files downloads offline"),
+    SEARCH_ENGINE("Search Engine", Icons.Default.Search, "google duckduckgo custom"),
+    DATA_MANAGEMENT("Data Management", Icons.Default.DeleteSweep, "clear history cookies cache"),
+    ABOUT("About Pipra", Icons.Default.Info, "version privacy policy terms developer")
 }
 
 @Composable
@@ -83,79 +95,126 @@ fun SettingsHubScreen(
     state: SettingsUiState,
     onSelect: (SettingsSection) -> Unit
 ) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp)
-            .testTag("settings_hub_list"),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        item { Spacer(Modifier.height(6.dp)) }
-        items(SettingsSection.entries) { section ->
-            val subtitle = when (section) {
-                SettingsSection.APPEARANCE -> "${state.themeMode.label} theme · Start page, tab strip, desktop"
-                SettingsSection.AD_BLOCKER ->
-                    if (state.adBlockEnabled) "${state.adBlockMode.label} mode · ${state.adBlockTotalBlocked} blocked"
-                    else "Off"
-                SettingsSection.WEBSITE_BLOCKING -> "${state.blockedRules.size} rule(s) · 7–365 day locks"
-                SettingsSection.ADULT_PROTECTION ->
-                    if (state.adultProtectionEnabled) "On · ${state.adultActiveCount} domains active"
-                    else "Off"
-                SettingsSection.PRIVACY -> "HTTPS-only, 3P cookies, pop-ups, tracking params"
-                SettingsSection.SECURITY -> "JavaScript, TLS validation, Safe Browsing"
-                SettingsSection.DOWNLOADS -> "${state.downloads.size} recorded · Download & File Center"
-                SettingsSection.SEARCH_ENGINE ->
-                    if (state.searchEngine == Store.CUSTOM_SEARCH_ENGINE) "Custom (${state.customSearchUrl.take(32)})"
-                    else state.searchEngine
-                SettingsSection.DATA_MANAGEMENT -> "Clear history, cookies, site data, cache"
-                SettingsSection.ABOUT -> "Pipra 3.0 · Privacy Policy, Terms & Attribution"
-            }
+    var searchQuery by remember { mutableStateOf("") }
+    val filteredSections = remember(searchQuery) {
+        val q = searchQuery.trim().lowercase()
+        if (q.isEmpty()) SettingsSection.entries
+        else SettingsSection.entries.filter {
+            it.title.lowercase().contains(q) || it.keywords.contains(q)
+        }
+    }
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 640.dp)
-                    .clickable { onSelect(section) }
-                    .testTag("settings_item_${section.name.lowercase()}"),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = PipraColors.Charcoal),
-                border = BorderStroke(1.dp, PipraColors.SilverBorder)
-            ) {
-                Row(
+    Column(modifier = Modifier.fillMaxSize()) {
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Search settings…") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = PipraColors.SilverMuted) },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    androidx.compose.material3.IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Default.Close, contentDescription = "Clear search", tint = PipraColors.SilverMuted)
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            colors = pipraTextFieldColors(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .testTag("settings_search_input")
+        )
+
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .testTag("settings_hub_list"),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            item { Spacer(Modifier.height(2.dp)) }
+            items(filteredSections) { section ->
+                val subtitle = when (section) {
+                    SettingsSection.APPEARANCE ->
+                        "${state.themeMode.label} theme · " + if (state.bottomAddressBar) "Bottom bar" else "Top bar"
+                    SettingsSection.EXTENSIONS ->
+                        if (state.installedExtensions.isEmpty()) "Install Firefox .xpi add-ons from catalog or file"
+                        else "${state.installedExtensions.size} extension(s) installed"
+                    SettingsSection.AD_BLOCKER ->
+                        if (state.adBlockEnabled) "${state.adBlockMode.label} mode · ${state.adBlockTotalBlocked} blocked"
+                        else "Off"
+                    SettingsSection.PRIVACY_STATS ->
+                        "${state.privacyStats.totalBlocked} blocked · ${state.privacyStats.httpsUpgrades} HTTPS upgrades"
+                    SettingsSection.WEBSITE_BLOCKING -> "${state.blockedRules.size} rule(s) · 7–365 day locks"
+                    SettingsSection.FOCUS_SCHEDULE ->
+                        if (state.pomodoro.isRunning()) "Pomodoro active (${state.pomodoro.remainingMinutes()}m left)"
+                        else "${state.focusRules.size} scheduled rule(s) · Pomodoro"
+                    SettingsSection.ADULT_PROTECTION ->
+                        if (state.adultProtectionEnabled) "On · ${state.adultActiveCount} domains active"
+                        else "Off"
+                    SettingsSection.SITE_PERMISSIONS ->
+                        "${state.sitePermissions.size} saved site rule(s) · Camera, Mic, Location"
+                    SettingsSection.APP_LOCK ->
+                        if (state.appLock.hasPin) "PIN lock enabled"
+                        else "Off · Protect Private mode, Settings, or Launch"
+                    SettingsSection.PRIVACY -> "HTTPS-only, 3P cookies, pop-ups, tracking params"
+                    SettingsSection.SECURITY -> "JavaScript, TLS validation, Safe Browsing"
+                    SettingsSection.DOWNLOADS -> "${state.downloads.size} recorded · Download & File Center"
+                    SettingsSection.SEARCH_ENGINE ->
+                        if (state.searchEngine == Store.CUSTOM_SEARCH_ENGINE) "Custom (${state.customSearchUrl.take(32)})"
+                        else state.searchEngine
+                    SettingsSection.DATA_MANAGEMENT -> "Clear history, cookies, site data, cache"
+                    SettingsSection.ABOUT -> "Pipra 4.0 · Privacy Policy, Terms & Attribution"
+                }
+
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .widthIn(max = 640.dp)
+                        .clickable { onSelect(section) }
+                        .testTag("settings_item_${section.name.lowercase()}"),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = PipraColors.Charcoal),
+                    border = BorderStroke(1.dp, PipraColors.SilverBorder)
                 ) {
-                    Icon(
-                        imageVector = section.icon,
-                        contentDescription = null,
-                        tint = PipraColors.ElectricBlueLight,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = section.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = PipraColors.SilverPrimary
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = section.icon,
+                            contentDescription = null,
+                            tint = PipraColors.ElectricBlueLight,
+                            modifier = Modifier.size(22.dp)
                         )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = PipraColors.SilverMuted
+                        Spacer(Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = section.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = PipraColors.SilverPrimary
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = PipraColors.SilverMuted
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = PipraColors.SilverMuted
                         )
                     }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = PipraColors.SilverMuted
-                    )
                 }
             }
+            item { Spacer(Modifier.height(16.dp)) }
         }
-        item { Spacer(Modifier.height(16.dp)) }
     }
 }
 
@@ -261,6 +320,20 @@ fun AppearanceSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
         item {
             SectionCard("Browser Layout") {
                 SettingSwitchRow(
+                    title = "Bottom address bar",
+                    subtitle = "Place URL bar and navigation buttons at the bottom for easy one-handed reach",
+                    checked = state.bottomAddressBar,
+                    testTag = "switch_bottom_address_bar",
+                    onCheckedChange = vm::setBottomAddressBar
+                )
+                SettingSwitchRow(
+                    title = "Auto-hide toolbar on scroll",
+                    subtitle = "Collapse the address bar while scrolling down webpages",
+                    checked = state.scrollToHideToolbar,
+                    testTag = "switch_scroll_hide_toolbar",
+                    onCheckedChange = vm::setScrollToHideToolbar
+                )
+                SettingSwitchRow(
                     title = "Show tab strip",
                     subtitle = "Display open tab chips above the address bar",
                     checked = state.showTabStrip,
@@ -281,6 +354,31 @@ fun AppearanceSettingsScreen(state: SettingsUiState, vm: SettingsViewModel) {
                     testTag = "switch_block_images",
                     onCheckedChange = vm::setBlockImages
                 )
+            }
+        }
+        item {
+            SectionCard("Reader Mode Defaults") {
+                Text(
+                    text = "Theme: ${state.readerTheme.replaceFirstChar { it.uppercase() }} · Text size: ${state.readerFontSizeSp}sp",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PipraColors.SilverMuted
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("light" to "Light", "sepia" to "Sepia", "dark" to "Dark").forEach { (key, label) ->
+                        val selected = state.readerTheme == key
+                        OutlinedButton(
+                            onClick = { vm.setReaderTheme(key) },
+                            border = BorderStroke(1.dp, if (selected) PipraColors.ElectricBlue else PipraColors.SilverBorder),
+                            modifier = Modifier.weight(1f).testTag("reader_theme_$key")
+                        ) {
+                            Text(
+                                label,
+                                color = if (selected) PipraColors.ElectricBlueLight else PipraColors.SilverPrimary
+                            )
+                        }
+                    }
+                }
             }
         }
         item {

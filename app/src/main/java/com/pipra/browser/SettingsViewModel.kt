@@ -43,6 +43,18 @@ data class SettingsUiState(
     val stripTrackingParams: Boolean = true,
     val javaScriptEnabled: Boolean = true,
     val askBeforeDownload: Boolean = true,
+    val bottomAddressBar: Boolean = false,
+    val scrollToHideToolbar: Boolean = false,
+    val readerTheme: String = "sepia",
+    val readerFontSizeSp: Int = 18,
+    val privacyStats: PrivacyStatsSnapshot = PrivacyStatsSnapshot(),
+    val focusRules: List<FocusScheduleRule> = emptyList(),
+    val pomodoro: PomodoroSessionState = PomodoroSessionState(),
+    val sitePermissions: List<SitePermissionEntry> = emptyList(),
+    val appLock: AppLockConfig = AppLockConfig(),
+    val installedExtensions: List<InstalledExtensionInfo> = emptyList(),
+    val extensionBusy: Boolean = false,
+    val extensionStatus: String? = null,
     val downloads: List<DownloadRecord> = emptyList(),
     val feedbackMessage: String? = null
 )
@@ -53,11 +65,20 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val websiteBlocker = WebsiteBlocker(application)
     val adBlocker = AdBlockerEngine(application)
     val adultBlocker = AdultBlockerEngine(application)
+    val privacyStats = PrivacyStatsManager(application)
+    val focusSchedule = FocusScheduleManager(application)
+    val sitePermissions = SitePermissionManager(application)
+    val appLock = AppLockManager(application)
 
     private val _state = MutableStateFlow(SettingsUiState())
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            PipraExtensionManager.installed.collect { exts ->
+                _state.update { it.copy(installedExtensions = exts) }
+            }
+        }
         refresh()
     }
 
@@ -68,6 +89,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val adultCount = adultBlocker.activeDomainCount()
             val integrityWarn = websiteBlocker.hasIntegrityWarning()
             val dl = store.downloads()
+            val statsSnap = privacyStats.snapshot()
+            val fRules = focusSchedule.rules()
+            val pomo = focusSchedule.pomodoroState()
+            val perms = sitePermissions.listEntries()
+            val lockCfg = appLock.config()
             _state.update { cur ->
                 cur.copy(
                     themeMode = store.themeMode,
@@ -96,6 +122,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     stripTrackingParams = store.stripTrackingParams,
                     javaScriptEnabled = store.javaScriptEnabled,
                     askBeforeDownload = store.askBeforeDownload,
+                    bottomAddressBar = store.bottomAddressBar,
+                    scrollToHideToolbar = store.scrollToHideToolbar,
+                    readerTheme = store.readerTheme,
+                    readerFontSizeSp = store.readerFontSizeSp,
+                    privacyStats = statsSnap,
+                    focusRules = fRules,
+                    pomodoro = pomo,
+                    sitePermissions = perms,
+                    appLock = lockCfg,
+                    installedExtensions = PipraExtensionManager.installed.value,
                     downloads = dl
                 )
             }
@@ -164,6 +200,33 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         store.showTabStrip = enabled
         _state.update { it.copy(showTabStrip = enabled) }
         refresh()
+    }
+
+    fun setBottomAddressBar(enabled: Boolean) {
+        store.bottomAddressBar = enabled
+        _state.update {
+            it.copy(
+                bottomAddressBar = enabled,
+                feedbackMessage = if (enabled) "Address bar moved to bottom" else "Address bar moved to top"
+            )
+        }
+        refresh()
+    }
+
+    fun setScrollToHideToolbar(enabled: Boolean) {
+        store.scrollToHideToolbar = enabled
+        _state.update { it.copy(scrollToHideToolbar = enabled) }
+        refresh()
+    }
+
+    fun setReaderTheme(theme: String) {
+        store.readerTheme = theme
+        _state.update { it.copy(readerTheme = store.readerTheme) }
+    }
+
+    fun setReaderFontSizeSp(sizeSp: Int) {
+        store.readerFontSizeSp = sizeSp
+        _state.update { it.copy(readerFontSizeSp = store.readerFontSizeSp) }
     }
 
     fun setBlockImages(enabled: Boolean) {
@@ -372,6 +435,198 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
         _state.update {
             it.copy(feedbackMessage = "Browsing data cleared (active website locks preserved)")
+        }
+    }
+
+    // ---- Pipra v4 actions --------------------------------------------------
+
+    fun resetPrivacyStats() {
+        privacyStats.resetStats()
+        _state.update { it.copy(privacyStats = privacyStats.snapshot(), feedbackMessage = "Privacy Shield stats reset") }
+    }
+
+    fun addFocusRule(
+        label: String,
+        hostsInput: String,
+        includeSubdomains: Boolean,
+        daysOfWeekMask: Int,
+        startMinute: Int,
+        endMinute: Int
+    ): Boolean {
+        val res = focusSchedule.addRule(label, hostsInput, includeSubdomains, daysOfWeekMask, startMinute, endMinute)
+        return res.fold(
+            onSuccess = {
+                _state.update { it.copy(focusRules = focusSchedule.rules(), feedbackMessage = "Focus schedule saved") }
+                true
+            },
+            onFailure = { err ->
+                _state.update { it.copy(feedbackMessage = err.message ?: "Could not save focus rule") }
+                false
+            }
+        )
+    }
+
+    fun toggleFocusRule(id: String, enabled: Boolean) {
+        focusSchedule.toggleRuleEnabled(id, enabled)
+        _state.update { it.copy(focusRules = focusSchedule.rules()) }
+    }
+
+    fun deleteFocusRule(id: String) {
+        focusSchedule.deleteRule(id)
+        _state.update { it.copy(focusRules = focusSchedule.rules(), feedbackMessage = "Focus schedule removed") }
+    }
+
+    fun startPomodoro(durationMinutes: Int, hostsInput: String): Boolean {
+        val res = focusSchedule.startPomodoro(durationMinutes, hostsInput)
+        return res.fold(
+            onSuccess = { p ->
+                _state.update { it.copy(pomodoro = p, feedbackMessage = "Pomodoro active for $durationMinutes min") }
+                true
+            },
+            onFailure = { err ->
+                _state.update { it.copy(feedbackMessage = err.message ?: "Enter valid hosts") }
+                false
+            }
+        )
+    }
+
+    fun stopPomodoro() {
+        focusSchedule.stopPomodoro()
+        _state.update { it.copy(pomodoro = focusSchedule.pomodoroState(), feedbackMessage = "Pomodoro stopped") }
+    }
+
+    fun setSitePermission(host: String, type: SitePermissionType, decision: SitePermissionDecision) {
+        sitePermissions.setDecision(host, type, decision)
+        _state.update { it.copy(sitePermissions = sitePermissions.listEntries()) }
+    }
+
+    fun removeSitePermission(host: String, type: SitePermissionType) {
+        sitePermissions.removeEntry(host, type)
+        _state.update { it.copy(sitePermissions = sitePermissions.listEntries()) }
+    }
+
+    fun clearAllSitePermissions() {
+        sitePermissions.clearAll()
+        _state.update { it.copy(sitePermissions = emptyList(), feedbackMessage = "All site permissions reset to Ask") }
+    }
+
+    fun setAppLockPin(pin: String): Boolean {
+        return appLock.setPin(pin).fold(
+            onSuccess = {
+                _state.update { it.copy(appLock = appLock.config(), feedbackMessage = "App Lock PIN saved") }
+                true
+            },
+            onFailure = { err ->
+                _state.update { it.copy(feedbackMessage = err.message ?: "Invalid PIN") }
+                false
+            }
+        )
+    }
+
+    fun updateAppLockScopes(
+        lockOnLaunch: Boolean,
+        lockPrivateWindow: Boolean,
+        lockSettings: Boolean,
+        allowDeviceCredential: Boolean
+    ) {
+        appLock.updateScopes(lockOnLaunch, lockPrivateWindow, lockSettings, allowDeviceCredential)
+        _state.update { it.copy(appLock = appLock.config()) }
+    }
+
+    fun disableAppLock(currentPin: String): Boolean {
+        return when (val res = appLock.disableLock(currentPin)) {
+            is PinVerifyResult.Success -> {
+                _state.update { it.copy(appLock = appLock.config(), feedbackMessage = "App Lock disabled") }
+                true
+            }
+            is PinVerifyResult.Invalid -> {
+                _state.update { it.copy(feedbackMessage = "Wrong PIN (${res.remainingAttempts} attempts left)") }
+                false
+            }
+            is PinVerifyResult.LockedOut -> {
+                _state.update { it.copy(feedbackMessage = "Too many attempts. Wait ${res.remainingSeconds}s") }
+                false
+            }
+        }
+    }
+
+    fun installExtensionFromUrl(url: String) {
+        if (_state.value.extensionBusy) return
+        _state.update { it.copy(extensionBusy = true, extensionStatus = "Installing extension…") }
+        val runtime = PipraGeckoRuntime.getOrCreate(getApplication(), store)
+        PipraExtensionManager.installFromUrl(url, runtime) { res ->
+            res.fold(
+                onSuccess = { info ->
+                    _state.update {
+                        it.copy(
+                            extensionBusy = false,
+                            extensionStatus = "Installed ${info.name} v${info.version}",
+                            feedbackMessage = "${info.name} installed"
+                        )
+                    }
+                },
+                onFailure = { err ->
+                    _state.update {
+                        it.copy(
+                            extensionBusy = false,
+                            extensionStatus = err.message ?: "Installation failed",
+                            feedbackMessage = err.message ?: "Extension install failed"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun installExtensionFromUri(uri: android.net.Uri) {
+        if (_state.value.extensionBusy) return
+        _state.update { it.copy(extensionBusy = true, extensionStatus = "Installing local .xpi package…") }
+        val runtime = PipraGeckoRuntime.getOrCreate(getApplication(), store)
+        PipraExtensionManager.installFromContentUri(getApplication(), uri, runtime) { res ->
+            res.fold(
+                onSuccess = { info ->
+                    _state.update {
+                        it.copy(
+                            extensionBusy = false,
+                            extensionStatus = "Installed ${info.name} v${info.version}",
+                            feedbackMessage = "${info.name} installed"
+                        )
+                    }
+                },
+                onFailure = { err ->
+                    _state.update {
+                        it.copy(
+                            extensionBusy = false,
+                            extensionStatus = err.message ?: "Local .xpi install failed",
+                            feedbackMessage = err.message ?: "Local .xpi install failed"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun toggleExtensionEnabled(id: String, enabled: Boolean) {
+        PipraExtensionManager.setEnabled(id, enabled)
+    }
+
+    fun toggleExtensionPrivate(id: String, allowed: Boolean) {
+        PipraExtensionManager.setAllowedInPrivate(id, allowed)
+    }
+
+    fun updateExtension(id: String) {
+        PipraExtensionManager.updateExtension(id) { ok ->
+            _state.update {
+                it.copy(feedbackMessage = if (ok) "Extension checked for updates" else "Could not update extension")
+            }
+        }
+    }
+
+    fun uninstallExtension(id: String) {
+        PipraExtensionManager.uninstall(id) { ok ->
+            _state.update {
+                it.copy(feedbackMessage = if (ok) "Extension removed" else "Could not remove extension")
+            }
         }
     }
 }

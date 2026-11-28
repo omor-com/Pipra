@@ -60,6 +60,23 @@ enum class GameEvent {
     CRASH
 }
 
+enum class AntSkin(
+    val key: String,
+    val label: String,
+    val bodyHex: Long,
+    val accentHex: Long
+) {
+    CLASSIC("classic", "Classic Blue", 0xFF1E293B, 0xFF3B82F6),
+    SOLAR_AMBER("amber", "Amber Solar", 0xFF78350F, 0xFFF59E0B),
+    EMERALD_LEAF("emerald", "Emerald Shield", 0xFF064E3B, 0xFF10B981),
+    CRIMSON_EMBER("crimson", "Crimson Ember", 0xFF7F1D1D, 0xFFF43F5E);
+
+    companion object {
+        fun fromKey(raw: String?): AntSkin =
+            entries.firstOrNull { it.key.equals(raw, ignoreCase = true) } ?: CLASSIC
+    }
+}
+
 /**
  * Pure Kotlin state & physics engine for Pipra Ant Dash.
  * Decoupled from Compose/Canvas so physics, pickups, and shield mechanics stay deterministic and unit-testable.

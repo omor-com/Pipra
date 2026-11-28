@@ -93,6 +93,27 @@
             android:src="@drawable/ic_refresh"
             android:contentDescription="@string/reload" />
 
+        <FrameLayout
+            android:id="@+id/btnTabs"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/tabs_switcher">
+
+            <TextView
+                android:id="@+id/txtTabsCount"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:text="1"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:textColor="@color/text" />
+        </FrameLayout>
+
         <ImageButton
             android:id="@+id/btnMenu"
             style="@style/ToolIcon"

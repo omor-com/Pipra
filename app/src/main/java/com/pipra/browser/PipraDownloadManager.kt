@@ -279,6 +279,45 @@ object PipraDownloadManager {
         Store(appCtx).saveDownloadItemsV3(active)
     }
 
+    fun registerCompletedFile(
+        context: Context,
+        fileName: String,
+        sourceUrl: String,
+        mimeType: String,
+        file: File,
+        recordInHistory: Boolean = true
+    ): DownloadItem {
+        val appCtx = context.applicationContext
+        ensureInitialized(appCtx)
+        val now = System.currentTimeMillis()
+        val size = if (file.exists()) file.length() else 0L
+        val item = DownloadItem(
+            id = UUID.randomUUID().toString(),
+            fileName = fileName,
+            url = sourceUrl,
+            mimeType = mimeType,
+            totalBytes = size,
+            downloadedBytes = size,
+            speedBytesPerSec = 0L,
+            status = DownloadStatus.COMPLETED,
+            localPath = file.absolutePath,
+            createdAt = now,
+            completedAt = now
+        )
+        if (recordInHistory) {
+            insertOrUpdateItem(appCtx, item)
+        } else {
+            _items.value = listOf(item) + _items.value
+        }
+        return item
+    }
+
+    fun uniqueDownloadTarget(context: Context, rawFileName: String): File {
+        val sanitized = DomainUtils.sanitizeDownloadFileName(rawFileName)
+            .ifBlank { "export_${System.currentTimeMillis()}.pdf" }
+        return uniqueTargetFile(downloadsDir(context.applicationContext), sanitized)
+    }
+
     fun shareUriForFile(context: Context, file: File): Uri? {
         return try {
             FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)

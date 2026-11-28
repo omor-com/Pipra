@@ -134,6 +134,12 @@ class Store(private val context: Context) {
         const val KEY_BLOCK_POPUPS = "block_popups"
         const val KEY_ASK_BEFORE_DOWNLOAD = "ask_before_download"
         const val KEY_SHOW_TAB_STRIP = "show_tab_strip"
+        const val KEY_BOTTOM_ADDRESS_BAR = "bottom_address_bar"
+        const val KEY_SCROLL_HIDE_TOOLBAR = "scroll_hide_toolbar"
+        const val KEY_READER_THEME = "reader_theme"
+        const val KEY_READER_FONT_SIZE = "reader_font_size"
+        const val KEY_GAME_SOUND = "game_sound_enabled"
+        const val KEY_GAME_SKIN = "game_skin_key"
 
         const val DEFAULT_HOMEPAGE = "pipra://home"
         const val DEFAULT_SEARCH_ENGINE = "Google"
@@ -363,6 +369,36 @@ class Store(private val context: Context) {
     var showTabStrip: Boolean
         get() = readPolicyBool(KEY_SHOW_TAB_STRIP, true)
         set(v) = writePolicyBool(KEY_SHOW_TAB_STRIP, v)
+
+    var bottomAddressBar: Boolean
+        get() = readPolicyBool(KEY_BOTTOM_ADDRESS_BAR, false)
+        set(v) = writePolicyBool(KEY_BOTTOM_ADDRESS_BAR, v)
+
+    var scrollToHideToolbar: Boolean
+        get() = readPolicyBool(KEY_SCROLL_HIDE_TOOLBAR, false)
+        set(v) = writePolicyBool(KEY_SCROLL_HIDE_TOOLBAR, v)
+
+    var readerTheme: String
+        get() {
+            val raw = readPolicyJson().optString(KEY_READER_THEME, "sepia")
+            return if (raw in setOf("light", "sepia", "dark")) raw else "sepia"
+        }
+        set(v) {
+            val clean = if (v in setOf("light", "sepia", "dark")) v else "sepia"
+            updatePolicyJson { it.put(KEY_READER_THEME, clean) }
+        }
+
+    var readerFontSizeSp: Int
+        get() = readPolicyJson().optInt(KEY_READER_FONT_SIZE, 18).coerceIn(14, 28)
+        set(v) = updatePolicyJson { it.put(KEY_READER_FONT_SIZE, v.coerceIn(14, 28)) }
+
+    var gameSoundEnabled: Boolean
+        get() = prefs.getBoolean(KEY_GAME_SOUND, true)
+        set(v) = prefs.edit().putBoolean(KEY_GAME_SOUND, v).apply()
+
+    var gameSkinKey: String
+        get() = prefs.getString(KEY_GAME_SKIN, "classic") ?: "classic"
+        set(v) = prefs.edit().putString(KEY_GAME_SKIN, v).apply()
 
     private fun readPolicyBool(key: String, default: Boolean): Boolean {
         val p = readPolicyJson()

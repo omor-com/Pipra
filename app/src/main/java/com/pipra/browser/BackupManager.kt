@@ -38,6 +38,10 @@ class BackupManager(private val context: Context) {
             .put("stripTrackingParams", store.stripTrackingParams)
             .put("javaScriptEnabled", store.javaScriptEnabled)
             .put("askBeforeDownload", store.askBeforeDownload)
+            .put("bottomAddressBar", store.bottomAddressBar)
+            .put("scrollToHideToolbar", store.scrollToHideToolbar)
+            .put("readerTheme", store.readerTheme)
+            .put("readerFontSizeSp", store.readerFontSizeSp)
 
         root.put("preferences", prefsObj)
 
@@ -97,6 +101,14 @@ class BackupManager(private val context: Context) {
                 store.stripTrackingParams = prefs.optBoolean("stripTrackingParams", true)
                 store.javaScriptEnabled = prefs.optBoolean("javaScriptEnabled", true)
                 store.askBeforeDownload = prefs.optBoolean("askBeforeDownload", true)
+                store.bottomAddressBar = prefs.optBoolean("bottomAddressBar", false)
+                store.scrollToHideToolbar = prefs.optBoolean("scrollToHideToolbar", false)
+                if (prefs.has("readerTheme")) {
+                    store.readerTheme = prefs.optString("readerTheme", "sepia")
+                }
+                if (prefs.has("readerFontSizeSp")) {
+                    store.readerFontSizeSp = prefs.optInt("readerFontSizeSp", 18)
+                }
             }
 
             val bookmarks = root.optJSONArray("bookmarks")
